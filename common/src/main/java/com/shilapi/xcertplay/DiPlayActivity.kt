@@ -98,11 +98,20 @@ class DiPlayActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         languagePreferenceAtCreate = AppLocale.preference(this)
         com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        // Match the projection host exactly. The head-unit system bars are global state, so a page
+        // that hides a bar the host shows resizes the host's surface on the way back - and a size
+        // change restarts the CarPlay session.
+        val hideTopBar = AirPlayPersistence.loadHideTopBar(this)
+        val hideBottomBar = AirPlayPersistence.loadHideBottomBar(this)
+        WindowCompat.setDecorFitsSystemWindows(window, !(hideTopBar && hideBottomBar))
         window.statusBarColor = BG; window.navigationBarColor = BG
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = false
-            hide(WindowInsetsCompat.Type.statusBars())
+            if (hideTopBar) hide(WindowInsetsCompat.Type.statusBars())
+            else show(WindowInsetsCompat.Type.statusBars())
+            if (hideBottomBar) hide(WindowInsetsCompat.Type.navigationBars())
+            else show(WindowInsetsCompat.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         setupError = runCatching { DiPlayBootstrap.ensure(this) }.exceptionOrNull()?.let {
             android.util.Log.e("DiPlaySetup", "CarPlay authentication could not be loaded", it)

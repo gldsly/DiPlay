@@ -3235,7 +3235,14 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun scheduleDisplaySize(width: Int, height: Int) {
         if (width <= 0 || height <= 0 || shuttingDown.get()) return
         val size = DisplaySize(width, height)
-        if (size == activeDisplaySize || size == pendingDisplaySize) return
+        if (size == activeDisplaySize) {
+            // The window settled back where it was - a system bar that flickered while another
+            // activity covered this one. Drop the pending change instead of restarting for it.
+            pendingDisplaySize = null
+            mainHandler.removeCallbacks(applyDisplaySize)
+            return
+        }
+        if (size == pendingDisplaySize) return
         pendingDisplaySize = size
         mainHandler.removeCallbacks(applyDisplaySize)
         mainHandler.postDelayed(applyDisplaySize, DISPLAY_CHANGE_DEBOUNCE_MILLIS)
@@ -3255,12 +3262,26 @@ class CarPlayHostActivity : ComponentActivity() {
                 "Display updated while handshake is reset: " +
                     "${previous.width}x${previous.height} -> ${size.width}x${size.height}",
             )
+        } else if (isSystemBarResize(previous, size)) {
+            // A head-unit bar appearing or hiding changes the height only. Tearing CarPlay down for
+            // that costs a full renegotiation, so keep the negotiated size and let the texture view
+            // scale it; the next handshake picks the new size up.
+            appendLog(
+                "Display height changed by a system bar: " +
+                    "${previous.width}x${previous.height} -> ${size.width}x${size.height}; " +
+                    "keeping the running session",
+            )
         } else {
             restartCarPlay(
                 "Display changed ${previous.width}x${previous.height} -> ${size.width}x${size.height}",
             )
         }
     }
+
+    /** True when the only difference is a bar-sized height change, which is not a resolution change. */
+    private fun isSystemBarResize(previous: DisplaySize, next: DisplaySize): Boolean =
+        previous.width == next.width &&
+            Math.abs(previous.height - next.height) <= SYSTEM_BAR_RESIZE_PIXELS
 
     private fun recordDetectedMaximum(size: DisplaySize) {
         val width = maxOf(maximumDetectedWidthPixels, size.width)
@@ -3660,7 +3681,11 @@ class CarPlayHostActivity : ComponentActivity() {
         const val SCREEN_TYPE_MAIN = 110
         const val SCREEN_TYPE_ALT = 111
         const val LOG_RETENTION_MILLIS = 5 * 60_000L
-        const val DISPLAY_CHANGE_DEBOUNCE_MILLIS = 500L
+        // Long enough to absorb a system bar sliding back in after another activity covered this
+        // one: every accepted change tears the CarPlay session down and renegotiates it.
+        const val DISPLAY_CHANGE_DEBOUNCE_MILLIS = 1_200L
+        /** Height difference a head-unit system bar can account for; anything larger is a real change. */
+        const val SYSTEM_BAR_RESIZE_PIXELS = 240
         const val RECONNECT_DELAY_MILLIS = 2_000L
         const val IAP_TUNNEL_RECONNECT_DELAY_MILLIS = 15_000L
         const val CONTROLLER_CLOSE_TIMEOUT_MILLIS = 4_000L
