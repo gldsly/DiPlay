@@ -61,6 +61,10 @@ internal class AudioFocusCoordinator(
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                     request = null
                     requestedChannel = null
+                    // Nothing is asking us to stay quiet any more, and the focus is no longer ours to
+                    // hold: drop the duck. Some head units never send the matching GAIN callback,
+                    // which used to pin the music at DUCKED_VOLUME for the rest of the session.
+                    broadcast(FULL_VOLUME)
                 }
             }
         }
@@ -412,7 +416,7 @@ private class VideoDecoder(
     private val queue = VideoDecodeQueue()
     @Volatile private var running = true
     @Volatile private var decoder: MediaCodec? = null
-    private var outputSurface: Surface? = surface
+    @Volatile private var outputSurface: Surface? = surface
     private var lastConfig: VideoJob.Config? = null
     private var renderedFrameLogged = false
     private var submittedFrameLogged = false
@@ -433,6 +437,11 @@ private class VideoDecoder(
     }
 
     fun setSurface(surface: Surface?) {
+        // A detach takes effect here rather than in the worker: the host releases the old Surface as
+        // soon as this returns, and a frame rendered into a released Surface makes the vendor decoder
+        // fail - which rebuilds the decoder and asks for a keyframe, the very cost that keeping it
+        // alive was meant to avoid. The queued job still carries the change to the codec calls.
+        if (surface == null) outputSurface = null
         queue.offer(VideoJob.SurfaceChanged(surface))
     }
 
@@ -807,6 +816,8 @@ private class AudioRenderer(
     private val autoBuffer = mediaBufferMillis == MediaAudioBuffer.AUTO_MILLIS
     private val slidingMaxGapMs = AtomicLong()
     private var trackCapacityBytes = 0
+    /** Backoff between start attempts; doubles up to MAX_START_RETRY_MILLIS. */
+    private var retryDelayMillis = MIN_START_RETRY_MILLIS
     private val frameBytes = if (format.channels >= 2) 4 else 2
     private var totalWrittenFrames = 0L
     private var writtenFramesThisWindow = 0L
@@ -889,32 +900,53 @@ private class AudioRenderer(
     }
 
     private fun run() {
-        try {
-            when (format.codec) {
-                AudioCodecKind.AAC_LC -> configureCodec(MediaFormat.MIMETYPE_AUDIO_AAC)
-                AudioCodecKind.OPUS -> configureCodec(MediaFormat.MIMETYPE_AUDIO_OPUS)
-                AudioCodecKind.LPCM -> Unit
-            }
-            createTrack()
-            requestAudioFocus()
-            while (running) {
-                queue.poll(AUDIO_POLL_MILLIS, TimeUnit.MILLISECONDS)?.let(::handle)
-                // Output becomes ready asynchronously, including after the last packet of a burst.
-                // Waiting for the next UDP packet can strand decoded sound for hundreds of ms.
-                codec?.let(::drainCodec)
-                maintainPlaybackBuffer()
-                logStatsIfDue()
-            }
-        } catch (_: InterruptedException) {
-            // Worker shut down.
-        } catch (error: Exception) {
-            if (running) {
+        // A failed start used to end this thread while the renderer stayed in the sink's map, so the
+        // stream went silent for the rest of the session behind a single log line. Retry with backoff
+        // instead: what was missing (an AudioTrack, a codec, audio focus) is often back a moment later.
+        while (running) {
+            try {
+                when (format.codec) {
+                    AudioCodecKind.AAC_LC -> configureCodec(MediaFormat.MIMETYPE_AUDIO_AAC)
+                    AudioCodecKind.OPUS -> configureCodec(MediaFormat.MIMETYPE_AUDIO_OPUS)
+                    AudioCodecKind.LPCM -> Unit
+                }
+                check(createTrack()) { "AudioTrack is unavailable" }
+                requestAudioFocus()
+                while (running) {
+                    queue.poll(AUDIO_POLL_MILLIS, TimeUnit.MILLISECONDS)?.let(::handle)
+                    // Output becomes ready asynchronously, including after the last packet of a burst.
+                    // Waiting for the next UDP packet can strand decoded sound for hundreds of ms.
+                    codec?.let(::drainCodec)
+                    maintainPlaybackBuffer()
+                    logStatsIfDue()
+                }
+                return
+            } catch (_: InterruptedException) {
+                return
+            } catch (error: Exception) {
+                if (!running) return
                 Log.e(TAG, "audio renderer worker failed", error)
-                report("Audio: renderer failed audioType=${format.audioType} error=${error.javaClass.simpleName}")
+                report(
+                    "Audio: renderer failed audioType=${format.audioType} " +
+                        "error=${error.javaClass.simpleName}; retrying in ${retryDelayMillis}ms",
+                )
+            } finally {
+                runCatching { logStatsIfDue(force = true) }
+                release()
             }
-        } finally {
-            runCatching { logStatsIfDue(force = true) }
-            release()
+            if (!awaitRetry()) return
+        }
+    }
+
+    /** Waits out the backoff between start attempts; false when the worker was asked to stop. */
+    private fun awaitRetry(): Boolean {
+        val delay = retryDelayMillis
+        retryDelayMillis = (retryDelayMillis * 2).coerceAtMost(MAX_START_RETRY_MILLIS)
+        return try {
+            Thread.sleep(delay)
+            running
+        } catch (_: InterruptedException) {
+            false
         }
     }
 
@@ -952,14 +984,14 @@ private class AudioRenderer(
         }
     }
 
-    private fun createTrack() {
+    private fun createTrack(): Boolean {
         val encoding = AndroidAudioFormat.ENCODING_PCM_16BIT
         val channelMask = if (format.channels >= 2) AndroidAudioFormat.CHANNEL_OUT_STEREO
         else AndroidAudioFormat.CHANNEL_OUT_MONO
         val minBuffer = AudioTrack.getMinBufferSize(format.sampleRate, channelMask, encoding)
         if (minBuffer <= 0) {
             Log.e(TAG, "AudioTrack buffer size unavailable rate=${format.sampleRate} channels=${format.channels}")
-            return
+            return false
         }
         val selection = mappedSelection()
         mappedChannel = selection.channel
@@ -1034,6 +1066,7 @@ private class AudioRenderer(
                 "streamOverride=$streamOverride " +
                 "focus=${if (audioFocusEnabled) "on" else "off"}",
         )
+        return true
     }
 
     /**
@@ -1491,5 +1524,7 @@ private class AudioRenderer(
         const val STATS_TAG = "DiPlay-AudioStats"
         const val STATS_WINDOW_NS = 5_000_000_000L
         const val DECODED_BUFFER_LOG_INTERVAL = 50
+        const val MIN_START_RETRY_MILLIS = 500L
+        const val MAX_START_RETRY_MILLIS = 5_000L
     }
 }

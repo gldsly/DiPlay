@@ -791,6 +791,10 @@ class CarPlayHostActivity : ComponentActivity() {
         dismissClusterPresentation()
         mainHandler.removeCallbacks(applyDisplaySize)
         mainHandler.removeCallbacks(expireOldLogLines)
+        // The expiry runnable re-arms itself while entries remain, so removing the callback once is not
+        // enough: without this it keeps waking the main thread for up to LOG_RETENTION_MILLIS after
+        // this activity is gone, holding the whole view tree through its closure.
+        logLines.clear()
         currentSurface?.let { surface ->
             sink?.clearSurface(SCREEN_TYPE_MAIN, surface)
             sink?.clearSurface(SCREEN_TYPE_ALT, surface)
@@ -798,6 +802,9 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         currentSurface = null
         currentSurfaceTexture = null
+        // These pools belong to this activity; the controller's own pools are closed with the session.
+        teardownExecutor.shutdown()
+        airPlayCommandExecutor.shutdown()
         sessionLog?.append("Activity destroyed")
         sessionLog?.close()
         sessionLog = null
@@ -3625,6 +3632,8 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun refreshLogView(nowMillis: Long) {
+        // Belt and braces with the onDestroy clear: never re-arm for a destroyed activity.
+        if (isDestroyed) return
         val cutoff = nowMillis - LOG_RETENTION_MILLIS
         while (logLines.firstOrNull()?.timestampMillis?.let { it <= cutoff } == true) {
             logLines.removeFirst()
