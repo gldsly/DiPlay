@@ -34,10 +34,12 @@ internal object DiPlayBootstrap {
             } finally {
                 staging.deleteRecursively()
             }
+            // Defaults belong to a fresh install only. Writing them on every startup would silently
+            // reset an MFi target or a debug-log switch the user picked in Settings.
+            AirPlayPersistence.saveMfiTarget(context, MfiTarget.LOCAL)
+            AirPlayPersistence.saveDebugLogsEnabled(context, false)
         }
         LocalMfiAuthenticationClient.load(target)
-        AirPlayPersistence.saveMfiTarget(context, MfiTarget.LOCAL)
-        AirPlayPersistence.saveDebugLogsEnabled(context, false)
         ready = true
     }
 

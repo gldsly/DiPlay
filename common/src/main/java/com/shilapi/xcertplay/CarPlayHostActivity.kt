@@ -310,7 +310,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var microphoneAvailable = false
     private var microphonePermissionResolved = false
     private var wirelessEnabled = false
-    private var mfiTarget = MfiTarget.USB_CH341
+    private var mfiTarget = MfiTarget.LOCAL
     private var mfiI2cPath = AirPlayPersistence.DEFAULT_MFI_I2C_PATH
     private var remoteMfiServer = ""
     private var remoteMfiToken = ""
@@ -337,6 +337,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var reconnectScheduled = false
     private var sessionLog: SessionLogFile? = null
     private var cornerGestureActive = false
+    /** Set once the corner swipe takes over: the rest of that touch sequence must not reach CarPlay. */
+    private var cornerGestureClaimed = false
     private var cornerGestureStartX = 0f
     private var cornerGestureStartY = 0f
     private val shuttingDown = AtomicBoolean(false)
@@ -3443,6 +3445,18 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
         if (menuOpen) return true
 
+        // Once the corner swipe has claimed the gesture, swallow the rest of that sequence, the up
+        // included. The touch was cancelled at the hand-off, so forwarding the tail would leave
+        // CarPlay with moves and an up that never had a down.
+        if (cornerGestureClaimed) {
+            if (event.actionMasked == MotionEvent.ACTION_UP ||
+                event.actionMasked == MotionEvent.ACTION_CANCEL
+            ) {
+                cornerGestureClaimed = false
+            }
+            return true
+        }
+
         // Bottom-left corner, one finger, swipe down. Head units may report too few touch points for a
         // multi-finger swipe, or consume that gesture before this activity sees it, so a single finger
         // starting in a marked corner is the dependable path.
@@ -3465,8 +3479,9 @@ class CarPlayHostActivity : ComponentActivity() {
                         deltaY >= deltaX * SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO
                     ) {
                         cornerGestureActive = false
-                        controller?.sendTouch(emptyList())
+                        cornerGestureClaimed = true
                         appendLog("Settings gesture: bottom-left swipe")
+                        // showDiPlayHome() cancels the forwarded touch before it opens the page.
                         openSettingsMenu()
                         return true
                     }

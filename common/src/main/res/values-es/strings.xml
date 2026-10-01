@@ -214,7 +214,7 @@
     <string name="i2c_device_path_is_required">Se requiere la ruta del dispositivo I2C</string>
     <string name="identity_appearance">Identidad y apariencia</string>
     <string name="image_is_not_ready">La imagen no está lista</string>
-    <string name="in_carplay_swipe_down_with_three_fingers_to_open_diplay_se">En CarPlay, desliza hacia abajo con tres dedos para abrir los ajustes de DiPlay.</string>
+    <string name="in_carplay_swipe_down_with_three_fingers_to_open_diplay_se">En CarPlay, desliza un dedo hacia abajo desde la esquina inferior izquierda de la pantalla para abrir los ajustes de DiPlay.</string>
     <string name="instrument_contrast">Contraste del cuadro</string>
     <string name="instrument_theme">Tema del cuadro</string>
     <string name="keep_bluetooth_and_wi_fi_on_your_iphone_pair_with_the_car">Mantén activos el Bluetooth y el Wi‑Fi en tu iPhone. Empareja el teléfono con el Bluetooth del coche y luego selecciona tu iPhone aquí. Permite «Dispositivos cercanos» cuando se te pida.</string>

@@ -64,6 +64,8 @@ class DiPlayActivity : ComponentActivity() {
     private var navigationStreamType = 14
     private var testToneTrack: AudioTrack? = null
     private var toneStop: Runnable? = null
+    /** Channel behind the settings-page band read-out; reused per activity, closed in onDestroy. */
+    private var wirelessBandChannel: WifiP2pManager.Channel? = null
     private var exportButton: Button? = null
     private var adbStatus: TextView? = null
     private var adbCheckGeneration = 0
@@ -143,6 +145,13 @@ class DiPlayActivity : ComponentActivity() {
         }
     }
     override fun onPause() { handler.removeCallbacks(tick); super.onPause() }
+    override fun onDestroy() {
+        // The band read-out is the only place this activity keeps its own P2P channel; releasing it
+        // here stops repeated renders from leaking one channel per visit.
+        wirelessBandChannel?.let { channel -> runCatching { channel.close() } }
+        wirelessBandChannel = null
+        super.onDestroy()
+    }
 
     private fun render() {
         status = null; connectButton = null; disconnectButton = null; lastRunning = null
@@ -1218,7 +1227,11 @@ class DiPlayActivity : ComponentActivity() {
         target.text = stationLine
 
         val manager = getSystemService(WifiP2pManager::class.java) ?: return
-        val channel = runCatching { manager.initialize(this, mainLooper) {} }.getOrNull() ?: return
+        // initialize() hands out a fresh channel on every call, and this runs again on each onResume
+        // render, so keep one and release it in onDestroy.
+        val channel = wirelessBandChannel ?: runCatching {
+            manager.initialize(this, mainLooper) {}
+        }.getOrNull()?.also { wirelessBandChannel = it } ?: return
         runCatching {
             manager.requestGroupInfo(channel) { group ->
                 if (isFinishing || isDestroyed) return@requestGroupInfo
