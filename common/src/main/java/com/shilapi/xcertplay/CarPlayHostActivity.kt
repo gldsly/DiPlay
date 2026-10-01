@@ -320,9 +320,6 @@ class CarPlayHostActivity : ComponentActivity() {
     private var rightHandDrive = false
     private var hideTopBar = true
     private var hideBottomBar = true
-    /** Bar policy the running session was negotiated with; see systemBarPolicyChanged(). */
-    private var negotiatedHideTopBar = true
-    private var negotiatedHideBottomBar = true
     private var safeAreaDrawOutside = true
     private var locationReportingEnabled = false
     private var locationPermissionAvailable = false
@@ -3244,10 +3241,6 @@ class CarPlayHostActivity : ComponentActivity() {
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null) return
         val controllerGeneration = restartGeneration
-        // Remember the bar policy this handshake is negotiated with: unlike window flicker, a later
-        // change to it really does change the resolution the display reports.
-        negotiatedHideTopBar = hideTopBar
-        negotiatedHideBottomBar = hideBottomBar
         val config = createRuntimeConfig()
         val airPlayConfig = createAirPlayConfig(size)
         val locationProvider: Iap2LocationProvider? =
