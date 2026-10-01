@@ -163,8 +163,7 @@ class CarPlayVpnService : VpnService() {
         generation: Int,
         replacement: AirPlayAttachment,
     ) {
-        val server = ServerSocket()
-        server.bind(InetSocketAddress(replacement.address, replacement.config.port))
+        val server = bindAirPlayServer(replacement.address, replacement.config.port)
         attachment = replacement
         serverSocket = server
         Thread(
@@ -174,6 +173,37 @@ class CarPlayVpnService : VpnService() {
             isDaemon = true
             start()
         }
+    }
+
+    /**
+     * Binds the AirPlay listener, holding the bind open until the address is bindable.
+     *
+     * A Wi-Fi Direct group reports itself ready a moment before the kernel finishes assigning its
+     * link-local address to p2p0, so the first bind fails with EADDRNOTAVAIL. That used to fail the
+     * whole wireless bring-up - which tore the group down and cost a two-second reconnect - while
+     * the address showed up a few hundred milliseconds later.
+     */
+    private fun bindAirPlayServer(address: InetAddress, port: Int): ServerSocket {
+        val deadline = System.nanoTime() + ADDRESS_READY_TIMEOUT_MILLIS * 1_000_000L
+        while (true) {
+            val server = ServerSocket()
+            try {
+                server.bind(InetSocketAddress(address, port))
+                return server
+            } catch (error: Exception) {
+                runCatching { server.close() }
+                if (!isAddressNotReady(error) || System.nanoTime() >= deadline) throw error
+                Log.i(TAG, "AirPlay listener waiting for $address to become bindable")
+                runCatching { Thread.sleep(ADDRESS_READY_RETRY_MILLIS) }
+            }
+        }
+    }
+
+    /** EADDRNOTAVAIL: the interface exists but the kernel has not assigned the address yet. */
+    private fun isAddressNotReady(error: Exception): Boolean {
+        val message = error.message ?: return false
+        return message.contains("EADDRNOTAVAIL", ignoreCase = true) ||
+            message.contains("Cannot assign requested address", ignoreCase = true)
     }
 
     private fun acceptLoop(
@@ -298,6 +328,10 @@ class CarPlayVpnService : VpnService() {
         private const val LINK_LOCAL_ROUTE = "fe80::"
         private const val SESSION_NAME = "xcertplay CarPlay"
         private const val TUN_MTU = 1500
+
+        /** How long the listener waits for a just-created Wi-Fi Direct address to become bindable. */
+        private const val ADDRESS_READY_TIMEOUT_MILLIS = 4_000L
+        private const val ADDRESS_READY_RETRY_MILLIS = 100L
 
         /** Returns the VPN consent intent, or null when consent is already granted. */
         fun prepare(context: Context): Intent? = VpnService.prepare(context)

@@ -954,6 +954,7 @@ class CarPlayController(
             onStatus(CarPlayStatus.AttachingNetwork)
             val service = awaitVpnService()
                 ?: throw IOException("Could not bind the CarPlay AirPlay service")
+            val attachStartedAtNs = System.nanoTime()
             when (
                 val result = service.attachWireless(
                     bindAddress = hostAddress,
@@ -971,9 +972,11 @@ class CarPlayController(
                 is CarPlayVpnService.AttachResult.Failed ->
                     throw IOException(result.message)
             }
+            // Non-zero means the listener waited for the fresh Wi-Fi Direct address to be bindable.
             debugLog(
                 "wireless AirPlay listener attached bind=$hostAddressText " +
-                    "port=${airPlayConfig.port}",
+                    "port=${airPlayConfig.port} " +
+                    "waited=${(System.nanoTime() - attachStartedAtNs) / 1_000_000}ms",
             )
             if (isStaleWirelessRun(generation)) {
                 closeWirelessStack()
