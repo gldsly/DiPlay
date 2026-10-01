@@ -303,10 +303,18 @@ class DiPlayActivity : ComponentActivity() {
         section(content, getString(R.string.display_and_performance), R.drawable.ic_dp_display) { card ->
             carPlaySizeControl(card)
             choice(card, getString(R.string.resolution), listOf(getString(R.string.resolution_native), getString(R.string.s_80_lighter_load), getString(R.string.s_60_lightest_load)), listOf(10, 8, 6).indexOf(AirPlayPersistence.loadDisplayScaleTenths(this)).coerceAtLeast(0)) { AirPlayPersistence.saveDisplayScaleTenths(this, listOf(10, 8, 6)[it]) }
-            val bufferPresets = com.shilapi.xcertplay.media.MediaAudioBuffer.presets
-            choice(card, getString(R.string.music_buffer), listOf(getString(R.string.s_300_ms_default), getString(R.string.s_500_ms), getString(R.string.s_1000_ms_most_stable)),
-                bufferPresets.indexOf(AirPlayPersistence.loadMediaBufferMillis(this)).coerceAtLeast(0)) {
-                AirPlayPersistence.saveMediaBufferMillis(this, bufferPresets[it])
+            val bufferChoices = com.shilapi.xcertplay.media.MediaAudioBuffer.choices
+            choice(card, getString(R.string.music_buffer),
+                listOf(
+                    getString(R.string.s_100_ms_lowest_latency),
+                    getString(R.string.s_200_ms),
+                    getString(R.string.s_300_ms_default),
+                    getString(R.string.s_500_ms),
+                    getString(R.string.s_1000_ms_most_stable),
+                    getString(R.string.s_auto_follows_the_measured_jitter),
+                ),
+                bufferChoices.indexOf(AirPlayPersistence.loadMediaBufferMillis(this)).coerceAtLeast(0)) {
+                AirPlayPersistence.saveMediaBufferMillis(this, bufferChoices[it])
             }
             choice(card, getString(R.string.frame_rate), listOf(getString(R.string.s_30_fps_lighter_load), getString(R.string.s_60_fps_smoother_motion)), if (AirPlayPersistence.loadFps(this) == 60) 1 else 0) { AirPlayPersistence.saveFps(this, if (it == 1) 60 else 30) }
             toggle(card, getString(R.string.efficient_video), getString(R.string.use_hevc_leave_off_for_the_widest_head_unit_compatibility), AirPlayPersistence.loadHevcEnabled(this)) { AirPlayPersistence.saveHevcEnabled(this, it) }

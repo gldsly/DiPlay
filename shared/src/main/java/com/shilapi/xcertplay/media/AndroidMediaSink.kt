@@ -779,6 +779,10 @@ private class AudioRenderer(
     private val packetsDropped = AtomicInteger()
     private val lastArrivalNs = AtomicLong()
     private val maxArrivalGapMs = AtomicLong()
+    /** Auto buffer mode: the start window follows the decaying worst gap, up to the track's capacity. */
+    private val autoBuffer = mediaBufferMillis == MediaAudioBuffer.AUTO_MILLIS
+    private val slidingMaxGapMs = AtomicLong()
+    private var trackCapacityBytes = 0
     private val frameBytes = if (format.channels >= 2) 4 else 2
     private var totalWrittenFrames = 0L
     private var writtenFramesThisWindow = 0L
@@ -820,7 +824,17 @@ private class AudioRenderer(
             packetsReceived.incrementAndGet()
             val now = System.nanoTime()
             val previous = lastArrivalNs.getAndSet(now)
-            if (previous != 0L) maxArrivalGapMs.accumulateAndGet((now - previous) / 1_000_000L, ::maxOf)
+            if (previous != 0L) {
+                val gapMillis = (now - previous) / 1_000_000L
+                maxArrivalGapMs.accumulateAndGet(gapMillis, ::maxOf)
+                // Auto mode reads this instead of the per-window maximum: it remembers the worst gap
+                // for a while so a stall still counts after the window that saw it has been reset.
+                if (autoBuffer) {
+                    slidingMaxGapMs.updateAndGet { worst ->
+                        maxOf(gapMillis, worst * MediaAudioBuffer.AUTO_DECAY_PERCENT / 100)
+                    }
+                }
+            }
         }
         if (!started || !queue.offer(AudioPacket(rtp, sample))) {
             if (started) packetsDropped.incrementAndGet()
@@ -954,10 +968,15 @@ private class AudioRenderer(
         track = built
         trackAttributes = built.audioAttributes
         val capacityBytes = built.bufferSizeInFrames * frameBytes
-        startThresholdBytes = MediaAudioBuffer.startBytesFor(plan.startBytes, capacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
+        trackCapacityBytes = capacityBytes
+        startThresholdBytes = if (autoBuffer) {
+            autoThresholdBytes()
+        } else {
+            MediaAudioBuffer.startBytesFor(plan.startBytes, capacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
+        }
         report("Audio: ready audioType=${format.audioType} codec=${format.codec} " +
             "rate=${format.sampleRate} channels=${format.channels} " +
-            "route=$routeLabel " +
+            "route=$routeLabel buffer=${if (autoBuffer) "auto" else "${mediaBufferMillis}ms"} " +
             "bufferMs=${capacityBytes * 1000L / bytesPerSecond} startMs=${startThresholdBytes * 1000L / bytesPerSecond}")
         Log.i(
             TAG,
@@ -976,6 +995,16 @@ private class AudioRenderer(
                 "streamOverride=$streamOverride " +
                 "focus=${if (audioFocusEnabled) "on" else "off"}",
         )
+    }
+
+    /**
+     * Auto mode: start window for the worst gap seen recently, converted to bytes. Re-evaluated while
+     * the stream is still filling, so the first play already reflects the link it is playing on.
+     */
+    private fun autoThresholdBytes(): Int {
+        val targetMillis = MediaAudioBuffer.autoStartMillis(slidingMaxGapMs.get())
+        val planned = MediaAudioBuffer.bytesForMillis(format.sampleRate, format.channels, targetMillis)
+        return MediaAudioBuffer.startBytesFor(planned, trackCapacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
     }
 
     /** 0 keeps usage routing; 1-10 selects an Android legacy stream ID. */
@@ -1268,6 +1297,9 @@ private class AudioRenderer(
             lastPcmWriteNs = System.nanoTime()
             if (!playbackStarted) {
                 prebufferBytes += count
+                // Auto mode keeps sizing itself while the buffer fills, so the first play already
+                // reflects the gaps of the link it is playing on.
+                if (autoBuffer) startThresholdBytes = autoThresholdBytes()
                 if (prebufferBytes >= startThresholdBytes) {
                     startPlayback(track)
                     Log.i(TAG, "audio playback started type=${format.payloadType}")
@@ -1324,6 +1356,9 @@ private class AudioRenderer(
             "rx=${packetsReceived.getAndSet(0)} " +
             "dropped=${packetsDropped.getAndSet(0)} underruns=+${underruns - statsLastUnderruns} queue=${queue.size} " +
             "playing=$playbackStarted maxGapMs=${maxArrivalGapMs.getAndSet(0)} " +
+            "slidingMaxGapMs=${slidingMaxGapMs.get()} " +
+            "autoTargetMs=${if (autoBuffer) MediaAudioBuffer.autoStartMillis(slidingMaxGapMs.get()) else -1} " +
+            "startMs=${if (bytesPerSecond > 0) startThresholdBytes * 1000L / bytesPerSecond else -1} " +
             "sinceRxMs=${if (lastRx == 0L) -1 else (now - lastRx) / 1_000_000L} maxWriteMs=$maxWriteMs " +
             "writtenFrames=$writtenFramesThisWindow totalWrittenFrames=$totalWrittenFrames " +
             "playbackHeadFrames=${playbackHeadFrames ?: -1} playbackAdvanceFrames=${playbackAdvanceFrames ?: -1} " +
