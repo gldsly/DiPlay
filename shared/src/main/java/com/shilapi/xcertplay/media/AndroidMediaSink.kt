@@ -585,8 +585,11 @@ private class VideoDecoder(
         if (outputSurface === surface) return
         outputSurface = surface
         if (surface == null) {
-            releaseDecoder()
-            Log.i(TAG, "video decoder detached from surface")
+            // Keep the decoder. The surface is torn down every time another screen covers the host
+            // activity, and rebuilding the decoder forces a keyframe round-trip that the iPhone
+            // surfaces as a reconnect. feed() already returns early while outputSurface is null, so
+            // nothing is submitted in the meantime.
+            Log.i(TAG, "video decoder detached from surface (decoder kept)")
             return
         }
         val codec = decoder
