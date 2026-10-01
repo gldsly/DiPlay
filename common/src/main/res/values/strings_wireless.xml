@@ -1,0 +1,7 @@
+<resources>
+    <string name="wireless_station_label">Car Wi-Fi</string>
+    <string name="wireless_direct_label">Wi-Fi Direct (to iPhone)</string>
+    <string name="band_5ghz">5 GHz</string>
+    <string name="band_2ghz">2.4 GHz</string>
+    <string name="band_not_connected">not connected</string>
+</resources>

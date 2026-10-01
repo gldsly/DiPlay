@@ -16,6 +16,8 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.net.Uri
+import android.net.wifi.WifiManager
+import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -244,6 +246,9 @@ class DiPlayActivity : ComponentActivity() {
         section(content, getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
             card.addView(label(getString(R.string.choose_how_to_connect_follow_the_setup_steps_and_save_your), 16, MUTED))
             card.addView(button(getString(R.string.open_connection_setup), false) { page = "connection"; render() }, matchButton(12, 60))
+            val band = label("", 15, MUTED)
+            card.addView(band, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            reportWirelessBands(band)
         }
         section(content, getString(R.string.diagnostics), R.drawable.ic_dp_diagnostics) { card ->
             exportButton = button(if (exportInProgress) getString(R.string.saving_report) else getString(R.string.save_diagnostic_report), false) {
@@ -1200,6 +1205,39 @@ class DiPlayActivity : ComponentActivity() {
         }
         parent.addView(button, matchButton(0, 60)); parent.addView(space(12))
     }
+    /**
+     * Shows which band the head unit's own Wi-Fi and the Wi-Fi Direct group are on. Both share one
+     * radio, so the station connection usually decides the Direct band - and that band is what
+     * decides whether the wireless CarPlay picture gets enough bandwidth.
+     */
+    private fun reportWirelessBands(target: TextView) {
+        val station = runCatching {
+            getSystemService(WifiManager::class.java)?.connectionInfo?.frequency ?: 0
+        }.getOrDefault(0)
+        val stationLine = bandLine(getString(R.string.wireless_station_label), station)
+        target.text = stationLine
+
+        val manager = getSystemService(WifiP2pManager::class.java) ?: return
+        val channel = runCatching { manager.initialize(this, mainLooper) {} }.getOrNull() ?: return
+        runCatching {
+            manager.requestGroupInfo(channel) { group ->
+                if (isFinishing || isDestroyed) return@requestGroupInfo
+                val direct = group?.frequency ?: 0
+                target.text = stationLine + "\n" +
+                    bandLine(getString(R.string.wireless_direct_label), direct)
+            }
+        }
+    }
+
+    private fun bandLine(title: String, frequencyMHz: Int): String {
+        val band = when {
+            frequencyMHz in 5150..5895 -> getString(R.string.band_5ghz)
+            frequencyMHz in 2412..2484 -> getString(R.string.band_2ghz)
+            else -> getString(R.string.band_not_connected)
+        }
+        return "$title · $band"
+    }
+
     private fun card() = column().apply { background = rounded(SURFACE, BORDER); setPadding(dp(24), dp(24), dp(24), dp(24)) }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
