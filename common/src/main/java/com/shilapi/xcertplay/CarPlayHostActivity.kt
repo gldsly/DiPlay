@@ -340,6 +340,9 @@ class CarPlayHostActivity : ComponentActivity() {
     private var gestureTracking = false
     private var gestureStartX = 0f
     private var gestureStartY = 0f
+    private var cornerGestureActive = false
+    private var cornerGestureStartX = 0f
+    private var cornerGestureStartY = 0f
     private val shuttingDown = AtomicBoolean(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val teardownExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -3432,6 +3435,39 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
         if (menuOpen) return true
 
+        // Bottom-left corner, one finger, swipe down. Head units may report too few touch points for a
+        // multi-finger swipe, or consume that gesture before this activity sees it, so a single finger
+        // starting in a marked corner is the dependable path.
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                cornerGestureActive = event.pointerCount == 1 &&
+                    event.x <= view.width * SETTINGS_CORNER_WIDTH_FRACTION &&
+                    event.y >= view.height * (1f - SETTINGS_CORNER_HEIGHT_FRACTION)
+                cornerGestureStartX = event.x
+                cornerGestureStartY = event.y
+                // Deliberately not consumed: a tap or a drag starting in the corner still reaches
+                // CarPlay, because only a completed downward swipe opens the panel.
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (cornerGestureActive) {
+                    val deltaY = event.y - cornerGestureStartY
+                    val deltaX = Math.abs(event.x - cornerGestureStartX)
+                    if (
+                        deltaY >= dp(SETTINGS_GESTURE_SWIPE_DISTANCE_DP) &&
+                        deltaY >= deltaX * SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO
+                    ) {
+                        cornerGestureActive = false
+                        controller?.sendTouch(emptyList())
+                        appendLog("Settings gesture: bottom-left swipe")
+                        openSettingsMenu()
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> cornerGestureActive = false
+        }
+
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 gestureSequenceActive = false
@@ -3667,6 +3703,10 @@ class CarPlayHostActivity : ComponentActivity() {
         const val SETTINGS_GESTURE_FINGER_COUNT = 4
         const val SETTINGS_GESTURE_SWIPE_DISTANCE_DP = 72
         const val SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO = 1.15f
+
+        /** Bottom-left hot corner for the single-finger settings swipe, as a surface fraction. */
+        const val SETTINGS_CORNER_WIDTH_FRACTION = 0.28f
+        const val SETTINGS_CORNER_HEIGHT_FRACTION = 0.30f
         const val MAX_SETTINGS_MENU_WIDTH_PX = 1200
         val MENU_BACKGROUND = Color.rgb(12, 16, 19)
         val MENU_SECONDARY = Color.rgb(170, 180, 190)
