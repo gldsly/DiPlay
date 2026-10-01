@@ -13,8 +13,8 @@ class NavigationOutputWorkerTest {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val clusterRan = CountDownLatch(1)
-        val hud = NavigationOutputWorker("test-hud") {}
-        val cluster = NavigationOutputWorker("test-cluster") {}
+        val hud = NavigationOutputWorker("test-hud", {})
+        val cluster = NavigationOutputWorker("test-cluster", {})
         hud.start {}
         cluster.start {}
         try {
@@ -31,7 +31,7 @@ class NavigationOutputWorkerTest {
         val cleared = CountDownLatch(1)
         val starts = AtomicInteger()
         val frames = AtomicInteger()
-        val worker = NavigationOutputWorker("test-cleanup") { if (starts.get() > 0) cleared.countDown() }
+        val worker = NavigationOutputWorker("test-cleanup", { if (starts.get() > 0) cleared.countDown() })
         worker.start { starts.incrementAndGet() }
         try {
             worker.submit { entered.countDown(); release.await(3, TimeUnit.SECONDS) }
@@ -55,7 +55,7 @@ class NavigationOutputWorkerTest {
         val cleared = CountDownLatch(1)
         val initialized = CountDownLatch(1)
         val frames = AtomicInteger()
-        val worker = NavigationOutputWorker("test-overflow") { if (initialized.count == 0L) cleared.countDown() }
+        val worker = NavigationOutputWorker("test-overflow", { if (initialized.count == 0L) cleared.countDown() })
         worker.start { initialized.countDown() }
         await(initialized)
         try {
@@ -65,6 +65,27 @@ class NavigationOutputWorkerTest {
             release.countDown()
             await(cleared)
             assertEquals(0, frames.get())
+        } finally { release.countDown(); worker.clear() }
+    }
+
+    @Test fun `overflow reports the stop so a blank guidance display is explainable`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val initialized = CountDownLatch(1)
+        val reported = CountDownLatch(1)
+        val worker = NavigationOutputWorker(
+            "test-overflow-report",
+            clearOutput = {},
+            report = { if (it.contains("output stopped")) reported.countDown() },
+        )
+        worker.start { initialized.countDown() }
+        await(initialized)
+        try {
+            worker.submit { entered.countDown(); release.await(3, TimeUnit.SECONDS) }
+            await(entered)
+            repeat(140) { worker.submit {} }
+            release.countDown()
+            await(reported)
         } finally { release.countDown(); worker.clear() }
     }
 }

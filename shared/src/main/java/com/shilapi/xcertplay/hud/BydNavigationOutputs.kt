@@ -13,9 +13,15 @@ object BydNavigationOutputs {
     }
     fun setDiagnosticHold(hold: Boolean) { BydStandaloneHudOutput.syntheticHold = hold }
     @Volatile private var useStandalone = false
-    private val standalone = NavigationOutputWorker("diplay-standalone-output", BydStandaloneNavigationBridge::clear)
-    private val hud = NavigationOutputWorker("diplay-hud-output", BydHudBridge::clear)
-    private val cluster = NavigationOutputWorker("diplay-cluster-output", BydClusterBridge::clear)
+    /** The running session's log, so an output that stops shows up in the diagnostic report. */
+    @Volatile private var diagnostic: (String) -> Unit = {}
+    private fun report(message: String) { runCatching { diagnostic(message) } }
+    private val standalone = NavigationOutputWorker("diplay-standalone-output", BydStandaloneNavigationBridge::clear, ::report)
+    private val hud = NavigationOutputWorker("diplay-hud-output", BydHudBridge::clear, ::report)
+    private val cluster = NavigationOutputWorker("diplay-cluster-output", BydClusterBridge::clear, ::report)
+
+    /** Called by the session so a stopped output is reported instead of failing silently. */
+    fun setDiagnostic(report: (String) -> Unit) { diagnostic = report }
 
     /** The host reports whether its CarPlay map window is on the cluster (see [BydClusterMapPause]). */
     fun setClusterMapShown(shown: Boolean) { BydClusterMapPause.clusterMapShown = shown }

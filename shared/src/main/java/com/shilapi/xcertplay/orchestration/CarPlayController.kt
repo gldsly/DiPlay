@@ -228,7 +228,7 @@ class CarPlayController(
     private var permissionCloseable: Closeable? = null
     private var attachCloseable: Closeable? = null
     private var ch341PermissionCloseable: Closeable? = null
-    private var vpnLatch = CountDownLatch(1)
+    @Volatile private var vpnLatch = CountDownLatch(1)
     private val teardownComplete = CountDownLatch(1)
 
     private val serviceConnection = object : ServiceConnection {
@@ -238,7 +238,15 @@ class CarPlayController(
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            vpnService = null
+            // The framework dropped the binding without our unbind. Let the next attempt bind again
+            // and give it a fresh gate: leaving vpnBound set made bindVpn() a no-op that then awaited
+            // an already-open gate, so this session could never get its service back and the user had
+            // to kill the app to connect again.
+            synchronized(this@CarPlayController) {
+                vpnService = null
+                vpnBound = false
+                vpnLatch = CountDownLatch(1)
+            }
             fail(IphoneUsbException.DeviceUnavailable("CarPlay VPN service disconnected"))
         }
     }
@@ -246,6 +254,7 @@ class CarPlayController(
     private val sessionListener = object : AirPlaySessionListener {
         override fun onSessionActive(session: AirPlaySession) {
             if (activeSession !== session) {
+                BydNavigationOutputs.setDiagnostic(::debugLog)
                 BydNavigationOutputs.start(appContext)
                 // The gear may have changed since /info.
                 if (videoListener != null) session.setVideoPlaybackAllowed(VideoInCar.allowed)
@@ -1976,9 +1985,13 @@ class CarPlayController(
         }
     }
 
+    @Synchronized
     private fun bindVpn() {
         if (vpnBound) return
         vpnBound = true
+        // One gate per attempt. An already-opened gate returns from await() immediately, so a retry
+        // that reused it would hand the caller a null service without ever waiting for the bind.
+        vpnLatch = CountDownLatch(1)
         try {
             val intent = Intent(appContext, CarPlayVpnService::class.java)
             if (!appContext.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)) {
@@ -1991,6 +2004,7 @@ class CarPlayController(
         }
     }
 
+    @Synchronized
     private fun unbindVpn() {
         if (!vpnBound) return
         vpnBound = false

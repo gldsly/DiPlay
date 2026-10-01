@@ -125,7 +125,7 @@ class WifiP2pGroupManager(
                     throw P2pResetRequiredException()
                 }
                 diagnostic("Wi-Fi P2P reclaiming retained owned group")
-                removeGroupBlocking(p2pChannel, existing.networkName)
+                removeGroupBlocking(p2pChannel, expectedName = existing.networkName)
                 val removalDeadline = minOf(deadlineNanos, deadlineAfter(REMOVE_GROUP_TIMEOUT_MILLIS))
                 while (requestGroupInfo(attempt, p2pChannel, REQUEST_POLL_NANOS, requireResponse = true) != null) {
                     if (remainingNanos(removalDeadline) == 0L) throw IOException("Wi-Fi Direct reset did not finish")
@@ -247,7 +247,7 @@ class WifiP2pGroupManager(
         }
 
         if (removeGroup && activeChannel != null) {
-            removeGroupBlocking(activeChannel)
+            removeGroupBlocking(activeChannel, createdByUs = true)
         }
         activeChannel?.close()
         activeThread?.quitSafely()
@@ -606,18 +606,23 @@ class WifiP2pGroupManager(
             if (callbackThread === failedThread) callbackThread = null
         }
         if (removeGroup && failedChannel != null) {
-            removeGroupBlocking(failedChannel)
+            removeGroupBlocking(failedChannel, createdByUs = true)
         }
         failedChannel?.close()
         failedThread?.quitSafely()
     }
 
-    private fun removeGroupBlocking(channel: WifiP2pManager.Channel, expectedName: String? = observedCreatedName ?: requestedName) {
-        removeGroup(channel, waitForCallback = true, expectedName = expectedName)
+    private fun removeGroupBlocking(
+        channel: WifiP2pManager.Channel,
+        createdByUs: Boolean = false,
+        expectedName: String? = observedCreatedName ?: requestedName,
+    ) {
+        removeGroup(channel, waitForCallback = true, expectedName = expectedName, createdByUs = createdByUs)
     }
 
     private fun removeGroup(channel: WifiP2pManager.Channel, waitForCallback: Boolean,
-        expectedName: String? = observedCreatedName ?: requestedName) {
+        expectedName: String? = observedCreatedName ?: requestedName,
+        createdByUs: Boolean = false) {
         val latch = CountDownLatch(1)
         try {
             p2pManager.requestGroupInfo(channel) { current ->
@@ -626,10 +631,15 @@ class WifiP2pGroupManager(
                     return@requestGroupInfo
                 }
                 // Cleanup needs this attempt's exact identity. The reinstall namespace used at
-                // startup is broader and could also match a newer DiPlay session.
-                val ours = current.isGroupOwner && !expectedName.isNullOrBlank() &&
+                // startup is broader and could also match a newer DiPlay session. A system-default
+                // group is named by the framework, so there is nothing to match on when we never got
+                // its group info - but "this session created it and we still own it" is identity
+                // enough. Skipping it left the group behind, and the next start then demanded a
+                // manual Wi-Fi Direct reset before it would connect again.
+                val namedMatch = current.isGroupOwner && !expectedName.isNullOrBlank() &&
                     current.networkName == expectedName
-                if (!ours) {
+                val unnamedMatch = createdByUs && current.isGroupOwner && expectedName.isNullOrBlank()
+                if (!namedMatch && !unnamedMatch) {
                     diagnostic("Wi-Fi P2P cleanup skipped=another_app_owns_group")
                     latch.countDown()
                     return@requestGroupInfo
