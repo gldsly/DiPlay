@@ -1,93 +1,48 @@
 # DiPlay
 
-**CarPlay for compatible BYD Android head units.** Wired and wireless, with the familiar DiAuto interface. Independent app: `com.shihab.diplay`.
+**简体中文** · [English](README.en.md)
 
-> **Personal fork, developed with an AI assistant.** `gldsly/DiPlay` tracks
-> [shihabal3amri/DiPlay](https://github.com/shihabal3amri/DiPlay), which is itself based on
-> [shilapi/xcertplay](https://github.com/shilapi/xcertplay). Upstream releases are merged in as they
-> land; where a feature exists on both sides, upstream's version wins unless it is demonstrably worse
-> for this car.
+为兼容的比亚迪安卓车机提供有线及无线 CarPlay，采用 DiAuto 风格界面。
+
+> **个人 fork，由 AI 协助开发。** `gldsly/DiPlay` 跟随上游
+> [shihabal3amri/DiPlay](https://github.com/shihabal3amri/DiPlay)（它又基于
+> [shilapi/xcertplay](https://github.com/shilapi/xcertplay)），并持续合并上游代码。同一功能两边
+> 都有时，以上游实现为准，除非它对这台车明显更差。
 >
-> The work here is written by an AI assistant together with the car owner: the assistant implements
-> changes and states its evidence, the owner drives the car, tests and decides. Findings are checked
-> against the running code before they are reported or acted on. Upstream remains the authority for
-> releases, issues and support, and this fork accepts neither. **Nothing here is an official DiPlay
-> release.**
+> 本仓库的改动由 AI 助手与车主共同完成：AI 实现改动并说明依据，车主在真车上驾驶、测试并决策；
+> 每条结论都先对着代码核实再下判断。问题反馈、发布与支持以上游为准，本 fork 不接收。
+> **本仓库的任何产物都不是官方 DiPlay 发布。**
 
-> **BYD support scope:** These projects focus on BYD cars. They may work on other brands, but other brands are unsupported and there are no plans to add support or fix brand-specific incompatibilities.
+> 这些项目专注于比亚迪汽车。它们可能在其他品牌上运行，但其他品牌不在支持范围内，也没有增加支持或修复其品牌特定兼容性问题的计划。
 
-[Download & website](https://shihabal3amri.github.io/DiPlay/) · [Release](https://github.com/shihabal3amri/DiPlay/releases/tag/v0.2.8) · [Report a problem](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
+[下载与中文网站](https://shihabal3amri.github.io/DiPlay/zh-Hans/) · [English README](README.en.md) · [报告问题](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
 
-![DiPlay home](site/assets/home.png)
+0.2.8 为公开预览版，未经 Apple 认证。请安装在车机上，而非 iPhone。无需越狱、转接盒或认证服务器。无线连接支持车载热点或 Wi-Fi Direct（后者需要 Android 10 或更高版本）。
 
-## 0.2.8 — public preview
+本版本改进了无线 CarPlay 从蓝牙切换到 Wi-Fi 时以及 USB 连接下的位置上报，更新频率限制为每秒最多一次。可选的 ADB 车轮速度功能会在没有 GPS 时向 iPhone 发送比亚迪车轮速度和挡位，以支持位置推算；隧道效果尚未验证。新增可选的 iOS 27 驻车视频功能，可在车辆处于 P 挡时于车机屏幕播放受支持的视频，并使用 iPhone、触屏和方向盘控制。离开 P 挡后播放器会关闭。Apple TV+ 等受 DRM 保护的视频暂不支持，因为 DiPlay 不是获得 FairPlay 授权的接收器。
 
-Install on the **car**, not the iPhone. No jailbreak, dongle, Mac, account or authentication server is required for use. Core CarPlay does not require ADB; optional dashboard, battery, wheel-speed and parked-video features do. Your head unit must permit APK installation. Wireless supports Wi-Fi Direct or the car’s existing hotspot; Wi-Fi Direct requires Android 10+; the APK supports Android 9+ for wired use.
+认证使用从公开固件中提取的实验性配件身份，无法保证未来持续可用。部分车机仍可能卡顿或无法应用图标大小设置。应用界面支持英语、简体中文、阿拉伯语、俄语、乌克兰语和西班牙语。源代码、构建说明及许可证随版本提供。
 
-- Wired USB and wireless CarPlay with local authentication.
-- BYD HUD navigation with arrows, distance and street names on verified firmware.
-- Car hotspot support, improved audio buffering and saved receive diagnostics.
-- Automatic address discovery, fixed-channel Wi-Fi fallbacks and successful-configuration memory.
-- Icon/text size, resolution and frame rate; applying a display change reconnects CarPlay.
-- Local diagnostic export. Reports are sent only if you choose to share them.
-- Separate installation alongside DiAuto. Run one projection app at a time.
+## 本 fork 与上游的差异
 
-This is **not an Apple-certified product**. The APK bundles an experimental accessory identity recovered from public Carlinkit firmware, not a newly provisioned MFi identity for DiPlay. A bundled private key is extractable. Acceptance after future iOS updates, reliability across head units and suitability of that identity for general distribution are unresolved. This release invites community testing; it is not a guarantee of universal compatibility.
+本 fork 与上游是同一个应用：差异只有一组上游尚未包含的修复，加上从 fork 点之后合并进来的上游
+新代码，其余部分与上游一致。
 
-Earlier releases were tested on the development DiLink5.1 car: live windshield guidance and street names work, Car hotspot now starts CarPlay, and Wi-Fi Direct performance is substantially improved. Occasional audio cutouts remain and are deferred to a later update. The new features were tested on a BYD Tang with DiLink 5.0 and an iPhone 15 Pro on iOS 27; wheel-speed dead reckoning in tunnels remains unverified. Broader head-unit and iOS compatibility is not guaranteed. The HUD firmware scope and cleanup limits are documented in [BYD navigation](docs/BYD_NAVIGATION.md).
+- **设置往返**：从设置页返回不再重建 CarPlay 会话；车机顶部/底部状态栏改为两个独立开关，两个界面
+  遵循同一策略。
+- **音乐缓冲**：新增 100 / 200 毫秒档，以及按实测到达间隔自适应的「自动」档。**默认自动**——车
+  上实测中固定档仍会重缓冲，自动档不会。
+- **音频容错**：音频启动失败会退避重试，而不是整场静音；音频焦点丢失后音量不再卡在压低值；
+  音乐音量只有一个写入者。
+- **连接恢复**：冷启动首次绑定会等待 Wi-Fi Direct 地址就绪（不再失败后多等 2 秒）；本次会话创建的
+  Wi-Fi Direct 组（含系统命名）能被正确清理；VPN 服务被回收后可以重新绑定。
+- **导航音频**：导航声道默认 15（本车实测值，上游默认自动路由）；「导航压低音乐」与「音频焦点」
+  互斥，因为两者调整的是同一个音乐音量。
+- **诊断**：导航输出被迫停止、日志过期回调、Activity 线程池泄漏现在都会明确记录或释放，不再静默。
 
-## What’s new in 0.2.8
+## 来源与致谢
 
-- App interface in English, Simplified Chinese, Arabic, Russian and Spanish; synchronized Android app-language settings.
-- Steering-wheel media controls and long-press Siri on supported BYD firmware while CarPlay is on screen.
-- Dashboard display choices: map, turn card, or both; corrected dashboard keyframe recovery.
-- Optional ADB feature on supported DiLink 5.0: pause the dashboard map stream when its display mode hides the map.
-- Optional ADB battery reporting for Apple Maps, with warning threshold, charging-connector selection and a checked reconnect action.
-- Wireless location reporting continues across the Bluetooth-to-Wi-Fi handoff; USB and wireless updates are limited to one per second.
-- Optional ADB wheel-speed and gear reporting lets iPhone navigation estimate movement when GPS is unavailable. Tunnel use still needs validation.
-- Optional iOS 27 video playback on the car screen while parked, with iPhone, touchscreen and steering-wheel controls. Playback closes when the car leaves P.
-- DRM-protected video such as Apple TV+ is not supported; DiPlay is not a licensed FairPlay receiver. Netflix does not support AirPlay.
-
-## Documentation
-
-- [Install and connect](docs/INSTALL.md)
-- [Compatibility and troubleshooting](docs/COMPATIBILITY.md)
-- [Privacy and diagnostic reports](docs/PRIVACY.md)
-- [Build from source](docs/BUILD.md)
-- [Validation](docs/VALIDATION.md)
-- [Release notes](CHANGELOG.md)
-- [Credits and licenses](docs/THIRD_PARTY_NOTICES.md)
-
-The website is available in English, Arabic, Russian, Ukrainian, Spanish and Simplified Chinese. The app interface supports those same six languages. Choose the app language in Settings; on Android 13+, it stays synchronized with Android’s per-app language setting.
-
-## Fork differences
-
-This fork is the same app. The differences are a small set of fixes upstream does not have yet,
-plus whatever upstream has released since the fork point; everything else is upstream code.
-
-- **Settings round trip.** Leaving the settings screen no longer restarts the CarPlay session, and
-  the head unit's top and bottom bars are separate switches that both screens follow.
-- **Music buffer.** 100 ms and 200 ms join 300/500/1000, along with an auto window sized from the
-  arrival gaps the link actually shows. Auto is the default: measured in the car, the fixed windows
-  still rebuffered where auto did not.
-- **Audio resilience.** A failed audio start retries with backoff instead of going silent for the
-  rest of the session, and losing audio focus no longer leaves the music at ducked volume.
-- **Connection recovery.** The first wireless bind after a cold start waits for the fresh Wi-Fi
-  Direct address instead of failing and retrying two seconds later; a Wi-Fi Direct group this session
-  created is cleaned up even when the framework named it; the VPN binding can be re-established
-  after the framework drops the service.
-- **Guidance audio.** Guidance keeps stream 15, the stream measured on the BYD head unit; upstream
-  defaults to automatic routing there instead. Guidance ducking and audio focus are mutually
-  exclusive, because both adjust the same music volume.
-- **Diagnostics.** A guidance output that had to stop, the log-expiry callback and the activity's
-  thread pools now say so instead of leaking quietly.
-
-## Source and credits
-
-Based on [xcertplay](https://github.com/shilapi/xcertplay), GPL-3.0. The home/settings UI and website adapt [DiAuto](https://github.com/shihabal3amri/DiAuto), AGPL-3.0; that license is included in `docs/licenses`. Preserve those notices when distributing modifications. CarPlay and its icon belong to Apple Inc.; no Apple or BYD affiliation or endorsement is implied.
-
-This repository starts with a clean public source snapshot. Local research, tester reports and release-signing secrets are excluded. The complete source corresponding to the APK is provided with every release; experimental runtime identity assets are described separately in the build instructions and notices.
-
-## Local release packaging
-
-The release APK intentionally contains the experimental accessory identity. The Git repository and source archive exclude all accessory and Android signing keys; tests generate synthetic identities at runtime. Source/CI builds omit runtime identity assets by default. Local release builds explicitly select an external asset directory. Publishing the APK makes its bundled identity extractable; building locally does not preserve that identity's confidentiality.
+基于 [xcertplay](https://github.com/shilapi/xcertplay)，GPL-3.0。首页/设置界面与网站改编自
+[DiAuto](https://github.com/shihabal3amri/DiAuto)，AGPL-3.0，其许可证包含在 `docs/licenses` 中。
+分发修改版时请保留这些声明。CarPlay 及其图标属于 Apple Inc.；本项目与 Apple、比亚迪均无关联或
+背书关系。完整说明见[英文 README](README.en.md) 的 Source and credits 一节。
