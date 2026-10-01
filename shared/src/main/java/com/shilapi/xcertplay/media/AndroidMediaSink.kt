@@ -37,7 +37,12 @@ internal class AudioFocusCoordinator(
     private val enabled: Boolean,
     private val report: (String) -> Unit = {},
 ) {
-    private data class Entry(val channel: AudioChannel, val attributes: AudioAttributes)
+    private data class Entry(
+        val channel: AudioChannel,
+        val attributes: AudioAttributes,
+        /** Told the owning renderer which focus factor to fold into its own level. */
+        val applyFocusVolume: (Float) -> Unit,
+    )
 
     private val manager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private val active = LinkedHashMap<AudioTrack, Entry>()
@@ -47,18 +52,29 @@ internal class AudioFocusCoordinator(
         synchronized(this) {
             runCatching { report("Audio: focus change=$change activeTracks=${active.size}") }
             when (change) {
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> setVolume(DUCKED_VOLUME)
-                AudioManager.AUDIOFOCUS_GAIN -> setVolume(FULL_VOLUME)
-                // Keep CarPlay audio running on permanent or transient loss. Some head units
-                // do not send a later gain callback after taking focus back.
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> broadcast(DUCKED_VOLUME)
+                AudioManager.AUDIOFOCUS_GAIN -> broadcast(FULL_VOLUME)
+                // A loss hands the focus - and with it the wheel keys - to whatever asked for it.
+                // Forget the request instead of assuming it still holds focus, so the next acquire
+                // asks again. CarPlay audio keeps playing either way.
+                AudioManager.AUDIOFOCUS_LOSS,
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                    request = null
+                    requestedChannel = null
+                }
             }
         }
     }
 
     @Synchronized
-    fun acquire(track: AudioTrack, channel: AudioChannel, attributes: AudioAttributes) {
+    fun acquire(
+        track: AudioTrack,
+        channel: AudioChannel,
+        attributes: AudioAttributes,
+        applyFocusVolume: (Float) -> Unit,
+    ) {
         if (!enabled || manager == null || channel == AudioChannel.NAVIGATION) return
-        active[track] = Entry(channel, attributes)
+        active[track] = Entry(channel, attributes, applyFocusVolume)
         refreshRequest()
     }
 
@@ -95,8 +111,12 @@ internal class AudioFocusCoordinator(
         runCatching { report(line) }
     }
 
-    private fun setVolume(volume: Float) {
-        active.keys.forEach { track -> runCatching { track.setStereoVolume(volume, volume) } }
+    /**
+     * Hands the factor to each renderer instead of writing the track volume here. Guidance ducking
+     * writes the same tracks, so one owner per track is the only way the two cannot undo each other.
+     */
+    private fun broadcast(volume: Float) {
+        active.values.forEach { entry -> runCatching { entry.applyFocusVolume(volume) } }
     }
 
     private fun AudioChannel.focusPriority(): Int = when (this) {
@@ -314,7 +334,7 @@ class AndroidMediaSink(
 
     private fun applyMediaVolume(volume: Float) {
         audioRenderers.values.forEach { renderer ->
-            if (renderer.channel == AudioChannel.MEDIA) renderer.setOutputVolume(volume)
+            if (renderer.channel == AudioChannel.MEDIA) renderer.setGuidanceVolume(volume)
         }
     }
 
@@ -757,6 +777,10 @@ private class AudioRenderer(
 
     private var trackAttributes: AudioAttributes? = null
     @Volatile private var mappedChannel: AudioChannel? = null
+    /** Factor the audio-focus coordinator asked for; 1.0 while nothing wants the music quieter. */
+    @Volatile private var focusVolumeFactor = 1f
+    /** Factor guidance ducking asked for. The audible level is the smaller of the two. */
+    @Volatile private var guidanceVolumeFactor = 1f
     private val queue = LinkedBlockingQueue<AudioPacket>(MAX_QUEUED_PACKETS)
     @Volatile private var running = true
     @Volatile private var started = false
@@ -805,12 +829,25 @@ private class AudioRenderer(
     val channel: AudioChannel? get() = mappedChannel
 
     /**
-     * In-app volume control. Guidance ducking uses this instead of audio focus because both the
-     * music and the guidance track live in this process, and focus only arbitrates across apps.
+     * Guidance ducking sets this. Audio focus owns the other factor, and the audible level is always
+     * the smaller of the two - so neither feature can undo what the other just decided, which is
+     * what happened when both wrote the track volume directly.
      */
-    fun setOutputVolume(volume: Float) {
+    fun setGuidanceVolume(volume: Float) {
+        guidanceVolumeFactor = volume
+        applyEffectiveVolume()
+    }
+
+    /** Called by the sink's focus coordinator when the app gains, ducks or loses focus. */
+    private fun applyFocusVolume(volume: Float) {
+        focusVolumeFactor = volume
+        applyEffectiveVolume()
+    }
+
+    private fun applyEffectiveVolume() {
+        val effective = minOf(focusVolumeFactor, guidanceVolumeFactor)
         val current = track ?: return
-        runCatching { current.setStereoVolume(volume, volume) }
+        runCatching { current.setStereoVolume(effective, effective) }
     }
 
     fun start() {
@@ -974,6 +1011,8 @@ private class AudioRenderer(
         } else {
             MediaAudioBuffer.startBytesFor(plan.startBytes, capacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
         }
+        // The factors may already be below 1.0 when a track appears mid-announcement.
+        applyEffectiveVolume()
         report("Audio: ready audioType=${format.audioType} codec=${format.codec} " +
             "rate=${format.sampleRate} channels=${format.channels} " +
             "route=$routeLabel buffer=${if (autoBuffer) "auto" else "${mediaBufferMillis}ms"} " +
@@ -1064,7 +1103,7 @@ private class AudioRenderer(
             Log.i(TAG, "audio focus skipped channel=NAVIGATION; overlays without ducking")
             return
         }
-        track?.let { audioFocusCoordinator.acquire(it, channel, attributes) }
+        track?.let { audioFocusCoordinator.acquire(it, channel, attributes, ::applyFocusVolume) }
     }
 
     private fun abandonAudioFocus() {

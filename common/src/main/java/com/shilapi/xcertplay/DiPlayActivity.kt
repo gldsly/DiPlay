@@ -338,7 +338,14 @@ class DiPlayActivity : ComponentActivity() {
             }
         }
         section(content, getString(R.string.audio_routing)) { card ->
-            toggle(card, getString(R.string.contrib_audio_home_toggle_audio_focus), getString(R.string.contrib_audio_home_toggle_audio_focus_desc), AirPlayPersistence.loadAudioFocusEnabled(this)) { AirPlayPersistence.saveAudioFocusEnabled(this, it) }
+            val guidanceDucking = AirPlayPersistence.loadNavigationDucksMedia(this)
+            toggle(card, getString(R.string.contrib_audio_home_toggle_audio_focus),
+                if (guidanceDucking) getString(R.string.unavailable_while_guidance_ducking)
+                else getString(R.string.contrib_audio_home_toggle_audio_focus_desc),
+                AirPlayPersistence.loadAudioFocusEnabled(this),
+                enabled = !guidanceDucking) {
+                AirPlayPersistence.saveAudioFocusEnabled(this, it)
+            }
             if (resources.getBoolean(R.bool.config_advanced_audio_channel_mapping)) {
                 toggle(card, getString(R.string.advanced_audio_channel_mapping),
                     getString(R.string.use_usage_content_type_routing_instead_of_stream_type),
@@ -350,8 +357,11 @@ class DiPlayActivity : ComponentActivity() {
             navigationChannelControl(card)
             toggle(card, getString(R.string.contrib_audio_home_toggle_nav_duck),
                 getString(R.string.contrib_audio_home_toggle_nav_duck_desc),
-                AirPlayPersistence.loadNavigationDucksMedia(this)) {
+                guidanceDucking) {
                 AirPlayPersistence.saveNavigationDucksMedia(this, it)
+                // Both features decide the same music volume, so keep one of them in charge.
+                if (it) AirPlayPersistence.saveAudioFocusEnabled(this, false)
+                render()
             }
         }
         section(content, getString(R.string.location), R.drawable.ic_dp_navigation) { card ->
@@ -1218,11 +1228,19 @@ class DiPlayActivity : ComponentActivity() {
         build(card)
         parent.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
     }
-    private fun toggle(parent: LinearLayout, title: String, description: String, value: Boolean, save: (Boolean) -> Unit) {
+    private fun toggle(parent: LinearLayout, title: String, description: String, value: Boolean, enabled: Boolean = true, save: (Boolean) -> Unit) {
         val line = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(12), 0, dp(12)) }
         val text = column(); text.addView(label(title, 18, TEXT, true)); text.addView(label(description, 14, MUTED).apply { setPadding(0, dp(6), dp(16), 0) })
         line.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
-        line.addView(Switch(this).apply { contentDescription = title; isChecked = value; minHeight = dp(56); buttonTintList = ColorStateList.valueOf(ACCENT); setOnCheckedChangeListener { _, checked -> save(checked) } })
+        line.addView(Switch(this).apply {
+            contentDescription = title
+            isChecked = value
+            minHeight = dp(56)
+            buttonTintList = ColorStateList.valueOf(ACCENT)
+            isEnabled = enabled
+            alpha = if (enabled) 1f else 0.45f
+            setOnCheckedChangeListener { _, checked -> save(checked) }
+        })
         parent.addView(line)
     }
     private fun choice(parent: LinearLayout, title: String, options: List<String>, current: Int, reconnects: Boolean = true, save: (Int) -> Unit) {

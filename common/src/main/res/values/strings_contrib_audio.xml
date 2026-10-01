@@ -3,9 +3,10 @@
     <string name="contrib_audio_home_choice_summary">%1$s · %2$s</string>
     <string name="contrib_audio_home_media_channel_label">Media audio stream</string>
     <string name="contrib_audio_home_nav_channel_label">Navigation audio stream</string>
-    <string name="contrib_audio_home_nav_channel_note">Navigation defaults to 14, the stream BYD uses for guidance. 0 = automatic routing; values 1–20 are legacy stream IDs the head unit may route to its vehicle outputs. Tap a value to preview it. Changes apply on reconnect.</string>
+    <string name="contrib_audio_home_nav_channel_note">Navigation defaults to 15, the stream BYD uses for guidance. 0 = automatic routing; values 1–20 are legacy stream IDs the head unit may route to its vehicle outputs. Tap a value to preview it. Changes apply on reconnect.</string>
     <string name="contrib_audio_home_toggle_audio_focus">Audio focus</string>
-    <string name="contrib_audio_home_toggle_audio_focus_desc">CarPlay media claims audio focus. If sound disappears while enabled (some head units handle focus badly), turn it off. Changes apply on reconnect.</string>
+    <string name="contrib_audio_home_toggle_audio_focus_desc">CarPlay media claims audio focus, which also tells other car players to stop. It cannot be combined with guidance ducking, because both adjust the same music volume. Changes apply on reconnect.</string>
     <string name="contrib_audio_home_toggle_nav_duck">Lower music during guidance</string>
-    <string name="contrib_audio_home_toggle_nav_duck_desc">Navigation announcements reduce CarPlay music volume instead of playing straight over it. Both tracks belong to this app, so the adjustment is made here, not through audio focus. Some head units already do this in their own mixer. Changes apply on reconnect.</string>
+    <string name="contrib_audio_home_toggle_nav_duck_desc">Navigation announcements reduce CarPlay music volume instead of playing straight over it, with a short ramp at each end. Both tracks belong to this app, so the adjustment is made here, not through audio focus. Some head units already do this in their own mixer. Takes effect immediately.</string>
+    <string name="unavailable_while_guidance_ducking">Unavailable while guidance ducking is on.</string>
 </resources>
