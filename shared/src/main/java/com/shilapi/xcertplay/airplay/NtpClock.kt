@@ -103,7 +103,10 @@ class NtpClock : Closeable {
             try {
                 sock.receive(packet)
             } catch (_: Exception) {
-                if (running.get()) continue else return
+                if (!running.get()) return
+                // A socket in an error state throws immediately; back off so this thread cannot spin.
+                runCatching { Thread.sleep(RECEIVE_ERROR_BACKOFF_MILLIS) }
+                continue
             }
             val message = packet.data.copyOf(packet.length)
             val address = packet.address
@@ -181,6 +184,8 @@ class NtpClock : Closeable {
     private fun currentSocket(): DatagramSocket? = synchronized(socketLock) { socket }
 
     private companion object {
+        /** Delay before retrying a receive that failed for a reason other than a closed socket. */
+        const val RECEIVE_ERROR_BACKOFF_MILLIS = 50L
         const val PT_REQUEST = 210
         const val PT_RESPONSE = 211
         const val NTP_PACKET_BYTES = 32

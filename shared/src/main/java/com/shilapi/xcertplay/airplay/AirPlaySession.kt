@@ -631,6 +631,9 @@ class AirPlaySession(
                 socket.receive(DatagramPacket(buffer, buffer.size))
             } catch (_: Exception) {
                 if (closed.get()) return
+                // A socket in an error state throws immediately, so retrying without a delay would
+                // spin this thread at full speed until the session is torn down.
+                runCatching { Thread.sleep(RECEIVE_ERROR_BACKOFF_MILLIS) }
             }
         }
     }
@@ -753,6 +756,8 @@ class AirPlaySession(
 
     private companion object {
         const val TAG = "xcertplay-usb"
+        /** Delay before retrying a receive that failed for a reason other than a closed socket. */
+        const val RECEIVE_ERROR_BACKOFF_MILLIS = 50L
         const val PLIST_CONTENT_TYPE = "application/x-apple-binary-plist"
         const val PAIRING_CONTENT_TYPE = "application/pairing+tlv8"
         const val OCTET_CONTENT_TYPE = "application/octet-stream"

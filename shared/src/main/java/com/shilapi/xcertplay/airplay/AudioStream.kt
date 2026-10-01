@@ -178,6 +178,9 @@ class AudioStream(
                 socket.receive(DatagramPacket(buffer, buffer.size))
             } catch (_: Exception) {
                 if (closed.get()) return
+                // A socket in an error state throws immediately, so an unthrottled retry would spin
+                // this thread at full speed until the stream is closed.
+                runCatching { Thread.sleep(RECEIVE_ERROR_BACKOFF_MILLIS) }
             }
         }
     }
@@ -200,6 +203,8 @@ class AudioStream(
 
     private companion object {
         const val TAG = "xcertplay-usb"
+        /** Delay before retrying a receive that failed for a reason other than a closed socket. */
+        const val RECEIVE_ERROR_BACKOFF_MILLIS = 50L
         const val DATAGRAM_BYTES = 4_096
         const val AUDIO_RECEIVE_BUFFER_BYTES = 512 * 1024
         const val RTP_HEADER_LEN = 12
