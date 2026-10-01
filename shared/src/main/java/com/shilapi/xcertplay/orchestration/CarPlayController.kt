@@ -419,6 +419,21 @@ class CarPlayController(
         }
     }
 
+    /**
+     * Telephony HID press. Index 1 is the Hook Switch usage, which is how a head unit ends a call
+     * the iPhone is running through CarPlay.
+     */
+    fun sendTelephony(index: Int): Boolean {
+        if (closed) return false
+        val session = activeSession ?: return false
+        return try {
+            touchExecutor.execute { session.sendTelephony(index) }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     override fun close() {
         synchronized(this) {
             if (closed) return

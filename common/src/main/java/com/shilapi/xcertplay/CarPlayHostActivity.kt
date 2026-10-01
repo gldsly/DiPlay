@@ -729,8 +729,20 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
-    // The steering-wheel voice key reaches the focused window; while CarPlay is on screen it opens Siri.
+    // Steering-wheel keys reach the focused window; while CarPlay is on screen they drive it.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Name the wheel's call keys in the log, so a button that does nothing still identifies
+        // itself when the diagnostic report is read back.
+        if (event.action == KeyEvent.ACTION_UP) {
+            CarPlayMediaButton.describeKey(event.keyCode)?.let { appendLog("Key: $it") }
+        }
+        CarPlayMediaButton.telephonyForKeyCode(event.keyCode)?.let { usage ->
+            if (event.action == KeyEvent.ACTION_UP) {
+                val sent = controller?.sendTelephony(usage) == true
+                appendLog("Telephony: ${KeyEvent.keyCodeToString(event.keyCode)} sent=$sent")
+            }
+            return true
+        }
         if (!CarPlayMediaButton.opensSiri(event.keyCode)) return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_UP) {
             val sent = controller?.requestSiri() == true

@@ -41,4 +41,36 @@ object CarPlayMediaButton {
         KEYCODE_BYD_AUTO_MEDIA_PLAY_PAUSE -> PLAY_PAUSE
         else -> null
     }
+
+    /**
+     * Usage index 1 in [AirPlayHid]'s telephony report: the Hook Switch, which ends a call the
+     * iPhone is running through CarPlay.
+     */
+    const val TELEPHONY_HOOK_SWITCH = 1
+
+    /**
+     * The telephony HID press for [keyCode], or null when the key is not a call key.
+     *
+     * Only the end-call key is claimed. The answer key already works through the car's own phone
+     * stack on the head units seen so far, so taking it over would risk breaking it.
+     */
+    fun telephonyForKeyCode(keyCode: Int): Int? = when (keyCode) {
+        KeyEvent.KEYCODE_ENDCALL -> TELEPHONY_HOOK_SWITCH
+        else -> null
+    }
+
+    /**
+     * Keys worth naming in the log while diagnosing steering-wheel call buttons: the standard call
+     * keys plus every BYD wheel code, so a press that does nothing still shows up.
+     */
+    fun describeKey(keyCode: Int): String? = when (keyCode) {
+        KeyEvent.KEYCODE_CALL,
+        KeyEvent.KEYCODE_ENDCALL,
+        KeyEvent.KEYCODE_HEADSETHOOK,
+        KeyEvent.KEYCODE_VOICE_ASSIST,
+        KEYCODE_BYD_AUTO_MEDIA_VOICE,
+        KEYCODE_BYD_AUTO_MEDIA_VOICE_LONG,
+        KEYCODE_BYD_AUTO_MEDIA_PLAY_PAUSE -> KeyEvent.keyCodeToString(keyCode)
+        else -> null
+    }
 }
