@@ -63,6 +63,12 @@ class CarPlayRuntimeConfig(
     val manualHotspotSecurity: ManualHotspotSecurity = ManualHotspotSecurity.WPA2,
     val wirelessBluetoothDeviceAddress: String? = null,
     val locationReportingEnabled: Boolean = false,
+    /**
+     * Opt-in only. When on, a cabled connection also opens the iPhone's syslog relay for two minutes
+     * and keeps accessory/authentication lines in the local log, which is useful while diagnosing a
+     * failed MFi handshake and unnecessary otherwise.
+     */
+    val phoneDiagnosticCapture: Boolean = false,
 ) {
     init {
         require(iphoneDevices.all { it.vendorId == APPLE_VENDOR_ID }) {

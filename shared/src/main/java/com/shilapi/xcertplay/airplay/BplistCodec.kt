@@ -18,6 +18,8 @@ object BplistCodec {
         val offsetSize = bytes[trailer + 6].toInt() and 0xff
         val refSize = bytes[trailer + 7].toInt() and 0xff
         val numObjects = readBigEndianLong(bytes, (trailer + 8).toLong(), 8).toInt()
+        // The trailer is peer-supplied input. Bound it before it sizes an allocation.
+        require(numObjects in 1..MAX_OBJECTS) { "bplist: object count $numObjects is out of range" }
         val topObject = readBigEndianLong(bytes, (trailer + 16).toLong(), 8).toInt()
         val offsetTable = readBigEndianLong(bytes, (trailer + 24).toLong(), 8)
 
@@ -109,7 +111,16 @@ object BplistCodec {
         return concatBytes(*parts.toTypedArray())
     }
 
-    private fun readObject(bytes: ByteArray, offsets: LongArray, refSize: Int, index: Int): Any? {
+    private fun readObject(
+        bytes: ByteArray,
+        offsets: LongArray,
+        refSize: Int,
+        index: Int,
+        depth: Int = 0,
+    ): Any? {
+        // A self-referential object graph would otherwise recurse until the stack is gone.
+        require(depth <= MAX_DEPTH) { "bplist: nesting deeper than $MAX_DEPTH" }
+        require(index in offsets.indices) { "bplist: object reference $index is out of range" }
         var position = offsets[index].toInt()
         val markerByte = bytes[position].toInt() and 0xff
         val type = markerByte ushr 4
@@ -168,7 +179,7 @@ object BplistCodec {
                 val array = ArrayList<Any?>(count)
                 for (i in 0 until count) {
                     val reference = readBigEndianLong(bytes, position + i.toLong() * refSize, refSize).toInt()
-                    array.add(readObject(bytes, offsets, refSize, reference))
+                    array.add(readObject(bytes, offsets, refSize, reference, depth + 1))
                 }
                 array
             }
@@ -179,8 +190,8 @@ object BplistCodec {
                     val keyReference = readBigEndianLong(bytes, position + i.toLong() * refSize, refSize).toInt()
                     val valueReference =
                         readBigEndianLong(bytes, position + (count + i).toLong() * refSize, refSize).toInt()
-                    dict[readObject(bytes, offsets, refSize, keyReference).toString()] =
-                        readObject(bytes, offsets, refSize, valueReference)
+                    dict[readObject(bytes, offsets, refSize, keyReference, depth + 1).toString()] =
+                        readObject(bytes, offsets, refSize, valueReference, depth + 1)
                 }
                 dict
             }
@@ -280,4 +291,8 @@ object BplistCodec {
     private class Container(val head: ByteArray, val refs: IntArray) : Node()
 
     private const val APPLE_EPOCH_SECONDS = 978_307_200.0
+
+    /** Bounds on a decoded plist so a hostile trailer cannot size an allocation or blow the stack. */
+    private const val MAX_OBJECTS = 100_000
+    private const val MAX_DEPTH = 64
 }

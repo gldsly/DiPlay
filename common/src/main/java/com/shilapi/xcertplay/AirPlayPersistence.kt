@@ -41,6 +41,7 @@ object AirPlayPersistence {
     private const val KEY_ADVANCED_AUDIO_CHANNEL_MAPPING = "advanced_audio_channel_mapping"
     private const val KEY_AUDIO_FOCUS_ENABLED = "audio_focus_enabled"
     private const val KEY_NAVIGATION_DUCKS_MEDIA = "navigation_ducks_media"
+    private const val KEY_PHONE_DIAGNOSTIC_CAPTURE = "phone_diagnostic_capture"
     private const val KEY_MEDIA_AUDIO_CHANNEL = "media_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
 
@@ -178,6 +179,21 @@ object AirPlayPersistence {
     fun saveNavigationDucksMedia(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_NAVIGATION_DUCKS_MEDIA, enabled)
+            .apply()
+    }
+
+    /**
+     * Off by default. When on, connecting a cabled iPhone also opens its syslog relay for two
+     * minutes and keeps accessory/authentication lines in the local log. That is only useful while
+     * diagnosing a failed MFi handshake, so it must never run as part of an ordinary connection.
+     */
+    fun loadPhoneDiagnosticCapture(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PHONE_DIAGNOSTIC_CAPTURE, false)
+
+    fun savePhoneDiagnosticCapture(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_PHONE_DIAGNOSTIC_CAPTURE, enabled)
             .apply()
     }
 

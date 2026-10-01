@@ -1501,8 +1501,10 @@ class CarPlayController(
             )
             onStatus(CarPlayStatus.ConnectingControl)
             val carKitClient = LockdownCarKitClient(mux)
-            // Temporary lab capture, limited to accessory/authentication messages and two minutes.
-            try {
+            // Opt-in capture of the iPhone's own syslog, limited to accessory/authentication lines and
+            // two minutes. It reads data that belongs to the phone, so it only runs when the settings
+            // switch asks for it.
+            if (config.phoneDiagnosticCapture) try {
                 val relay = carKitClient.openService(pairRecord, config.label, "com.apple.syslog_relay")
                 Thread({
                     try {

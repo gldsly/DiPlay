@@ -116,6 +116,12 @@ class AirPlaySession(
     fun start() {
         Thread(::runControl, "airplay-control").apply {
             isDaemon = true
+            // runControl only handles Exception, so an Error would otherwise escape the thread and
+            // take the process down with it. End the session instead, which lets the app reconnect.
+            setUncaughtExceptionHandler { thread, error ->
+                Log.e(TAG, "airplay ${thread.name} died", error)
+                runCatching { close() }
+            }
             start()
         }
     }

@@ -1,0 +1,4 @@
+<resources>
+    <string name="phone_diagnostic_capture">Capture the iPhone log</string>
+    <string name="phone_diagnostic_capture_desc">Reads the iPhone\'s own system log while a cabled connection is being set up, keeping accessory and authentication lines for two minutes. Only useful when an MFi handshake fails; leave it off otherwise.</string>
+</resources>

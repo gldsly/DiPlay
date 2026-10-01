@@ -1,0 +1,4 @@
+<resources>
+    <string name="phone_diagnostic_capture">抓取 iPhone 日志</string>
+    <string name="phone_diagnostic_capture_desc">建立有线连接时读取 iPhone 自身的系统日志，只保留配件与认证相关的行，持续两分钟。仅在 MFi 握手失败需要排查时才有用，平时请保持关闭。</string>
+</resources>

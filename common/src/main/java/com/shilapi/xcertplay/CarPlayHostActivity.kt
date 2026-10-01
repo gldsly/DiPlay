@@ -159,6 +159,7 @@ class CarPlayHostActivity : ComponentActivity() {
         manualHotspotChannel = manualHotspotChannel,
         manualHotspotSecurity = manualHotspotSecurity,
         locationReportingEnabled = locationReportingEnabled,
+        phoneDiagnosticCapture = AirPlayPersistence.loadPhoneDiagnosticCapture(this),
     )
 
     private val vpnConsent =
