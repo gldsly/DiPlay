@@ -2,6 +2,18 @@
 
 **CarPlay for compatible BYD Android head units.** Wired and wireless, with the familiar DiAuto interface. Independent app: `com.shihab.diplay`.
 
+> **Personal fork, developed with an AI assistant.** `gldsly/DiPlay` tracks
+> [shihabal3amri/DiPlay](https://github.com/shihabal3amri/DiPlay), which is itself based on
+> [shilapi/xcertplay](https://github.com/shilapi/xcertplay). Upstream releases are merged in as they
+> land; where a feature exists on both sides, upstream's version wins unless it is demonstrably worse
+> for this car.
+>
+> The work here is written by an AI assistant together with the car owner: the assistant implements
+> changes and states its evidence, the owner drives the car, tests and decides. Findings are checked
+> against the running code before they are reported or acted on. Upstream remains the authority for
+> releases, issues and support, and this fork accepts neither. **Nothing here is an official DiPlay
+> release.**
+
 > **BYD support scope:** These projects focus on BYD cars. They may work on other brands, but other brands are unsupported and there are no plans to add support or fix brand-specific incompatibilities.
 
 [Download & website](https://shihabal3amri.github.io/DiPlay/) · [Release](https://github.com/shihabal3amri/DiPlay/releases/tag/v0.2.8) · [Report a problem](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
@@ -47,6 +59,28 @@ Earlier releases were tested on the development DiLink5.1 car: live windshield g
 - [Credits and licenses](docs/THIRD_PARTY_NOTICES.md)
 
 The website is available in English, Arabic, Russian, Ukrainian, Spanish and Simplified Chinese. The app interface supports those same six languages. Choose the app language in Settings; on Android 13+, it stays synchronized with Android’s per-app language setting.
+
+## Fork differences
+
+This fork is the same app. The differences are a small set of fixes upstream does not have yet,
+plus whatever upstream has released since the fork point; everything else is upstream code.
+
+- **Settings round trip.** Leaving the settings screen no longer restarts the CarPlay session, and
+  the head unit's top and bottom bars are separate switches that both screens follow.
+- **Music buffer.** 100 ms and 200 ms join 300/500/1000, along with an auto window sized from the
+  arrival gaps the link actually shows. Auto is the default: measured in the car, the fixed windows
+  still rebuffered where auto did not.
+- **Audio resilience.** A failed audio start retries with backoff instead of going silent for the
+  rest of the session, and losing audio focus no longer leaves the music at ducked volume.
+- **Connection recovery.** The first wireless bind after a cold start waits for the fresh Wi-Fi
+  Direct address instead of failing and retrying two seconds later; a Wi-Fi Direct group this session
+  created is cleaned up even when the framework named it; the VPN binding can be re-established
+  after the framework drops the service.
+- **Guidance audio.** Guidance keeps stream 15, the stream measured on the BYD head unit; upstream
+  defaults to automatic routing there instead. Guidance ducking and audio focus are mutually
+  exclusive, because both adjust the same music volume.
+- **Diagnostics.** A guidance output that had to stop, the log-expiry callback and the activity's
+  thread pools now say so instead of leaking quietly.
 
 ## Source and credits
 
