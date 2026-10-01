@@ -101,18 +101,8 @@ class DiPlayActivity : ComponentActivity() {
         // Match the projection host exactly. The head-unit system bars are global state, so a page
         // that hides a bar the host shows resizes the host's surface on the way back - and a size
         // change restarts the CarPlay session.
-        val hideTopBar = AirPlayPersistence.loadHideTopBar(this)
-        val hideBottomBar = AirPlayPersistence.loadHideBottomBar(this)
-        WindowCompat.setDecorFitsSystemWindows(window, !(hideTopBar && hideBottomBar))
         window.statusBarColor = BG; window.navigationBarColor = BG
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            if (hideTopBar) hide(WindowInsetsCompat.Type.statusBars())
-            else show(WindowInsetsCompat.Type.statusBars())
-            if (hideBottomBar) hide(WindowInsetsCompat.Type.navigationBars())
-            else show(WindowInsetsCompat.Type.navigationBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        applySystemBarPolicy()
         setupError = runCatching { DiPlayBootstrap.ensure(this) }.exceptionOrNull()?.let {
             android.util.Log.e("DiPlaySetup", "CarPlay authentication could not be loaded", it)
             getString(R.string.setup_error_auth)
@@ -160,6 +150,25 @@ class DiPlayActivity : ComponentActivity() {
         wirelessBandChannel?.let { channel -> runCatching { channel.close() } }
         wirelessBandChannel = null
         super.onDestroy()
+    }
+
+    /**
+     * Applies the same bar switches the projection host reads, so the two screens never disagree
+     * about which head-unit bars are hidden. Called on create and whenever a switch changes, so the
+     * change is visible here and already in place when CarPlay comes back to the front.
+     */
+    private fun applySystemBarPolicy() {
+        val hideTop = AirPlayPersistence.loadHideTopBar(this)
+        val hideBottom = AirPlayPersistence.loadHideBottomBar(this)
+        WindowCompat.setDecorFitsSystemWindows(window, !(hideTop && hideBottom))
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            if (hideTop) hide(WindowInsetsCompat.Type.statusBars())
+            else show(WindowInsetsCompat.Type.statusBars())
+            if (hideBottom) hide(WindowInsetsCompat.Type.navigationBars())
+            else show(WindowInsetsCompat.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     private fun render() {
@@ -319,8 +328,13 @@ class DiPlayActivity : ComponentActivity() {
             choice(card, getString(R.string.frame_rate), listOf(getString(R.string.s_30_fps_lighter_load), getString(R.string.s_60_fps_smoother_motion)), if (AirPlayPersistence.loadFps(this) == 60) 1 else 0) { AirPlayPersistence.saveFps(this, if (it == 1) 60 else 30) }
             toggle(card, getString(R.string.efficient_video), getString(R.string.use_hevc_leave_off_for_the_widest_head_unit_compatibility), AirPlayPersistence.loadHevcEnabled(this)) { AirPlayPersistence.saveHevcEnabled(this, it) }
             toggle(card, getString(R.string.right_hand_drive), getString(R.string.place_carplay_s_controls_closer_to_the_driver), AirPlayPersistence.loadRightHandDrive(this)) { AirPlayPersistence.saveRightHandDrive(this, it) }
-            toggle(card, getString(R.string.full_screen), getString(R.string.hide_the_car_s_system_bars_while_carplay_is_open), AirPlayPersistence.loadHideTopBar(this) && AirPlayPersistence.loadHideBottomBar(this)) {
-                AirPlayPersistence.saveHideTopBar(this, it); AirPlayPersistence.saveHideBottomBar(this, it)
+            toggle(card, getString(R.string.hide_top_status_bar), getString(R.string.hide_top_status_bar_desc), AirPlayPersistence.loadHideTopBar(this)) {
+                AirPlayPersistence.saveHideTopBar(this, it)
+                applySystemBarPolicy()
+            }
+            toggle(card, getString(R.string.hide_bottom_status_bar), getString(R.string.hide_bottom_status_bar_desc), AirPlayPersistence.loadHideBottomBar(this)) {
+                AirPlayPersistence.saveHideBottomBar(this, it)
+                applySystemBarPolicy()
             }
         }
         section(content, getString(R.string.audio_routing)) { card ->

@@ -188,6 +188,10 @@
     <string name="follow_instrument_theme_and_map_card">اتبع سمة لوحة العدادات وبطاقة الخريطة</string>
     <string name="frame_rate">معدل الإطارات</string>
     <string name="full_screen">ملء الشاشة</string>
+    <string name="hide_top_status_bar">إخفاء الشريط العلوي</string>
+    <string name="hide_top_status_bar_desc">يستخدم CarPlay الشريط الذي يشغله الشريط العلوي للسيارة.</string>
+    <string name="hide_bottom_status_bar">إخفاء الشريط السفلي</string>
+    <string name="hide_bottom_status_bar_desc">يستخدم CarPlay الشريط الذي يشغله الشريط السفلي للسيارة.</string>
     <string name="fullscreen">ملء الشاشة</string>
     <string name="getting_carplay_ready">جارٍ تجهيز CarPlay…</string>
     <string name="got_it">فهمت</string>

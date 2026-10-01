@@ -188,6 +188,10 @@
     <string name="follow_instrument_theme_and_map_card">Следовать теме приборов и карточке карты</string>
     <string name="frame_rate">Частота кадров</string>
     <string name="full_screen">Полный экран</string>
+    <string name="hide_top_status_bar">Скрыть верхнюю панель</string>
+    <string name="hide_top_status_bar_desc">CarPlay занимает полосу верхней панели автомобиля.</string>
+    <string name="hide_bottom_status_bar">Скрыть нижнюю панель</string>
+    <string name="hide_bottom_status_bar_desc">CarPlay занимает полосу нижней панели автомобиля.</string>
     <string name="fullscreen">Полноэкранный режим</string>
     <string name="getting_carplay_ready">Подготовка CarPlay…</string>
     <string name="got_it">Понятно</string>

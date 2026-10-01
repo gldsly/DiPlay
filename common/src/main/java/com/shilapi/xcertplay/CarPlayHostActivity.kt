@@ -304,6 +304,9 @@ class CarPlayHostActivity : ComponentActivity() {
     private var rightHandDrive = false
     private var hideTopBar = true
     private var hideBottomBar = true
+    /** Bar policy the running session was negotiated with; see systemBarPolicyChanged(). */
+    private var negotiatedHideTopBar = true
+    private var negotiatedHideBottomBar = true
     private var safeAreaDrawOutside = true
     private var locationReportingEnabled = false
     private var locationPermissionAvailable = false
@@ -589,6 +592,10 @@ class CarPlayHostActivity : ComponentActivity() {
         advancedAudioChannelMapping =
             advancedAudioChannelMappingSupported &&
                 AirPlayPersistence.loadAdvancedAudioChannelMapping(this)
+        // The settings page edits the same bar switches, so pick them up before the surface is laid
+        // out again: this page and that one must always agree on which bars are hidden.
+        hideTopBar = AirPlayPersistence.loadHideTopBar(this)
+        hideBottomBar = AirPlayPersistence.loadHideBottomBar(this)
         if (DiLink51ClusterLayout.automatic(this) && clusterMonitor == null) {
             clusterMonitor = DiLink51ClusterMonitor(this, ::onClusterActivityState).also { it.start() }
         } else if (!DiLink51ClusterLayout.automatic(this)) {
@@ -3126,6 +3133,10 @@ class CarPlayHostActivity : ComponentActivity() {
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null) return
         val controllerGeneration = restartGeneration
+        // Remember the bar policy this handshake is negotiated with: unlike window flicker, a later
+        // change to it really does change the resolution the display reports.
+        negotiatedHideTopBar = hideTopBar
+        negotiatedHideBottomBar = hideBottomBar
         val config = createRuntimeConfig()
         val airPlayConfig = createAirPlayConfig(size)
         val locationProvider: Iap2LocationProvider? =
@@ -3262,7 +3273,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 "Display updated while handshake is reset: " +
                     "${previous.width}x${previous.height} -> ${size.width}x${size.height}",
             )
-        } else if (isSystemBarResize(previous, size)) {
+        } else if (isSystemBarResize(previous, size) && !systemBarPolicyChanged()) {
             // A head-unit bar appearing or hiding changes the height only. Tearing CarPlay down for
             // that costs a full renegotiation, so keep the negotiated size and let the texture view
             // scale it; the next handshake picks the new size up.
@@ -3277,6 +3288,13 @@ class CarPlayHostActivity : ComponentActivity() {
             )
         }
     }
+
+    /**
+     * True when the bar switches in Settings no longer match the running handshake. That case is a
+     * real resolution change, so it must renegotiate rather than reuse the stale size.
+     */
+    private fun systemBarPolicyChanged(): Boolean =
+        hideTopBar != negotiatedHideTopBar || hideBottomBar != negotiatedHideBottomBar
 
     /** True when the only difference is a bar-sized height change, which is not a resolution change. */
     private fun isSystemBarResize(previous: DisplaySize, next: DisplaySize): Boolean =
