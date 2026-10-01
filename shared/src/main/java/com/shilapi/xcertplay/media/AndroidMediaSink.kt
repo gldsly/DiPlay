@@ -131,6 +131,8 @@ class AndroidMediaSink(
     private val navigationChannel: Int = 0,
     context: Context? = null,
     private val navigationStreamType: Int = AudioChannelMapper.DEFAULT_NAVIGATION_STREAM_TYPE,
+    /** When on, guidance playback lowers CarPlay music in-app instead of simply overlaying it. */
+    private val navigationDucksMedia: Boolean = false,
     onScreenStreamActiveChanged: ((Int, Boolean) -> Unit)? = null,
     private val mediaBufferMillis: Int = MediaAudioBuffer.DEFAULT_MILLIS,
     private val onAudioDiagnostic: (String) -> Unit = {},
@@ -158,6 +160,46 @@ class AndroidMediaSink(
     private val recoveryPending = AtomicBoolean(false)
     private val recoveryExecutor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "carplay-video-recovery").apply { isDaemon = true }
+    }
+
+    // Guidance ducking runs on the main looper so it can touch every renderer's track safely.
+    // Created lazily: plain JVM tests build this sink with no Android looper available.
+    @Volatile private var duckHandler: Handler? = null
+    private val fullMediaVolume = 1f
+    private val duckedMediaVolume = 0.3f
+    private val guidanceHoldMillis = 700L
+    private val duckRampMillis = 150L
+    private val releaseRampMillis = 500L
+    private val volumeRampStepMillis = 20L
+    @Volatile private var mediaDucked = false
+    @Volatile private var currentMediaVolume = 1f
+    private var mediaVolumeRampGeneration = 0
+    private val releaseDuck = Runnable {
+        mediaDucked = false
+        rampMediaVolume(fullMediaVolume, releaseRampMillis)
+    }
+
+    private fun guidanceHandler(): Handler? = duckHandler ?: runCatching {
+        Handler(Looper.getMainLooper()).also { duckHandler = it }
+    }.getOrNull()
+
+    /**
+     * Walks the music tracks to [target] over [durationMillis]. Jumping straight between levels is
+     * audible as a lurch at both ends of a guidance announcement, so ducking and un-ducking ramp.
+     */
+    private fun rampMediaVolume(target: Float, durationMillis: Long) {
+        val handler = guidanceHandler() ?: return
+        val generation = ++mediaVolumeRampGeneration
+        val start = currentMediaVolume
+        val steps = (durationMillis / volumeRampStepMillis).coerceAtLeast(1L).toInt()
+        for (step in 1..steps) {
+            handler.postDelayed({
+                if (generation != mediaVolumeRampGeneration) return@postDelayed
+                val volume = start + (target - start) * (step.toFloat() / steps)
+                currentMediaVolume = volume
+                applyMediaVolume(volume)
+            }, step * volumeRampStepMillis)
+        }
     }
 
     override fun setVideoRecoveryHandler(type: Int, handler: () -> Unit) {
@@ -227,6 +269,7 @@ class AndroidMediaSink(
     }
 
     override fun onAudioRtp(id: AudioStreamId, format: AudioFormat, rtp: ByteArray, sample: Int) {
+        if (navigationDucksMedia && mapsToGuidance(format)) duckMediaDuringGuidance()
         audioRenderer(id, format).submit(rtp, sample)
     }
 
@@ -242,6 +285,37 @@ class AndroidMediaSink(
             before to mediaAudioTypes.isNotEmpty()
         }
         if (before != after) onMediaAudioChanged(after)
+    }
+
+    /**
+     * Guidance and music are separate tracks inside this process, so audio focus cannot make one
+     * duck the other - focus only arbitrates between apps. The sink lowers the music tracks itself
+     * and restores them shortly after the guidance stream stops delivering packets.
+     */
+    private fun mapsToGuidance(format: AudioFormat): Boolean = AudioChannelMapper.map(
+        audioType = format.audioType,
+        payloadType = format.payloadType,
+        mode = if (advancedAudioChannelMapping) {
+            AudioChannelMappingMode.AUTOMOTIVE_BUS
+        } else {
+            AudioChannelMappingMode.MOBILE_COMPATIBLE
+        },
+    ).channel == AudioChannel.NAVIGATION
+
+    private fun duckMediaDuringGuidance() {
+        val handler = guidanceHandler() ?: return
+        if (!mediaDucked) {
+            mediaDucked = true
+            rampMediaVolume(duckedMediaVolume, duckRampMillis)
+        }
+        handler.removeCallbacks(releaseDuck)
+        handler.postDelayed(releaseDuck, guidanceHoldMillis)
+    }
+
+    private fun applyMediaVolume(volume: Float) {
+        audioRenderers.values.forEach { renderer ->
+            if (renderer.channel == AudioChannel.MEDIA) renderer.setOutputVolume(volume)
+        }
     }
 
     override fun onMicrophoneStarted(id: AudioStreamId, config: MicrophoneConfig) {
@@ -264,6 +338,7 @@ class AndroidMediaSink(
         videoRecoveryHandlers.clear()
         videoDiagnosticHandlers.clear()
         recoveryExecutor.shutdownNow()
+        duckHandler?.removeCallbacks(releaseDuck)
         audioRenderers.values.forEach(AudioRenderer::close)
         audioRenderers.clear()
         val hadMedia = synchronized(mediaAudioTypes) { mediaAudioTypes.isNotEmpty().also { mediaAudioTypes.clear() } }
@@ -678,12 +753,12 @@ private class AudioRenderer(
     private data class AudioPacket(val rtp: ByteArray, val sample: Int)
 
     private var trackAttributes: AudioAttributes? = null
-    private var mappedChannel: AudioChannel? = null
+    @Volatile private var mappedChannel: AudioChannel? = null
     private val queue = LinkedBlockingQueue<AudioPacket>(MAX_QUEUED_PACKETS)
     @Volatile private var running = true
     @Volatile private var started = false
     private var codec: MediaCodec? = null
-    private var track: AudioTrack? = null
+    @Volatile private var track: AudioTrack? = null
     private var pcm = ByteArray(64 * 1024)
     private var playbackStarted = false
     private var prebufferBytes = 0
@@ -718,6 +793,18 @@ private class AudioRenderer(
     private var lastPcmWriteNs = 0L
     private var rebufferCount = 0
     private val thread = Thread(::run, "carplay-audio").apply { isDaemon = true }
+
+    /** Channel this renderer resolved to once its track exists; read by the sink. */
+    val channel: AudioChannel? get() = mappedChannel
+
+    /**
+     * In-app volume control. Guidance ducking uses this instead of audio focus because both the
+     * music and the guidance track live in this process, and focus only arbitrates across apps.
+     */
+    fun setOutputVolume(volume: Float) {
+        val current = track ?: return
+        runCatching { current.setStereoVolume(volume, volume) }
+    }
 
     fun start() {
         if (started) return

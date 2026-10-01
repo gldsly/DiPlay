@@ -36,6 +36,7 @@ import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.hud.BydAdbAccess
 import com.shilapi.xcertplay.hud.BydOutputSettings
 import com.shilapi.xcertplay.host.R
+import com.shilapi.xcertplay.orchestration.MfiTarget
 import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
 import com.shilapi.xcertplay.transport.EvChargingConnectors
 import java.io.File
@@ -259,6 +260,18 @@ class DiPlayActivity : ComponentActivity() {
             toggle(card, getString(R.string.open_after_the_car_starts), getString(R.string.availability_depends_on_your_head_unit_s_startup_settings), AirPlayPersistence.loadAutoStartOnBoot(this)) { AirPlayPersistence.saveAutoStartOnBoot(this, it) }
             card.addView(button("${getString(R.string.choose_iphone_prefix)}${DiPlayPreferences.phoneName(this)}", false) { choosePhone() }, matchButton(12, 60))
         }
+        section(content, getString(R.string.mfi_authentication)) { card ->
+            val targets = listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341)
+            val labels = listOf(
+                getString(R.string.mfi_target_local),
+                getString(R.string.mfi_target_ch341),
+            )
+            val selected = targets.indexOf(AirPlayPersistence.loadMfiTarget(this)).coerceAtLeast(0)
+            choice(card, getString(R.string.mfi_target), labels, selected) { index ->
+                AirPlayPersistence.saveMfiTarget(this, targets[index])
+            }
+            card.addView(label(getString(R.string.mfi_target_note), 14, MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        }
         section(content, getString(R.string.display_and_performance), R.drawable.ic_dp_display) { card ->
             carPlaySizeControl(card)
             choice(card, getString(R.string.resolution), listOf(getString(R.string.resolution_native), getString(R.string.s_80_lighter_load), getString(R.string.s_60_lightest_load)), listOf(10, 8, 6).indexOf(AirPlayPersistence.loadDisplayScaleTenths(this)).coerceAtLeast(0)) { AirPlayPersistence.saveDisplayScaleTenths(this, listOf(10, 8, 6)[it]) }
@@ -285,6 +298,11 @@ class DiPlayActivity : ComponentActivity() {
             }
             mediaChannelControl(card)
             navigationChannelControl(card)
+            toggle(card, getString(R.string.contrib_audio_home_toggle_nav_duck),
+                getString(R.string.contrib_audio_home_toggle_nav_duck_desc),
+                AirPlayPersistence.loadNavigationDucksMedia(this)) {
+                AirPlayPersistence.saveNavigationDucksMedia(this, it)
+            }
         }
         section(content, getString(R.string.location), R.drawable.ic_dp_navigation) { card ->
             toggle(card, getString(R.string.report_location_to_iphone),
@@ -596,8 +614,8 @@ class DiPlayActivity : ComponentActivity() {
         val preview = AudioChannelPreview { channel ->
             toast(getString(R.string.contrib_audio_home_channel_preview_unavailable, channel))
         }
-        val labels = (0..10).map(Int::toString).toTypedArray()
-        var selection = current.coerceIn(0, 10)
+        val labels = (0..AirPlayPersistence.MAX_LEGACY_AUDIO_CHANNEL).map(Int::toString).toTypedArray()
+        var selection = current.coerceIn(0, AirPlayPersistence.MAX_LEGACY_AUDIO_CHANNEL)
         AlertDialog.Builder(this).setTitle(title)
             .setSingleChoiceItems(labels, selection) { _, which ->
                 selection = which

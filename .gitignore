@@ -38,3 +38,6 @@ release-signing.properties
 *.key
 *.apk
 *.aab
+
+# Local build counter used for artefact naming (DiPlay_<version>_LB_<n>.apk).
+.local-build-counter

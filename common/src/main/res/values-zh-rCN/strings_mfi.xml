@@ -1,0 +1,7 @@
+<resources>
+    <string name="mfi_authentication">MFi 认证</string>
+    <string name="mfi_target">认证来源</string>
+    <string name="mfi_target_local">内置配件身份</string>
+    <string name="mfi_target_ch341">CH341 桥接到 MFi 芯片</string>
+    <string name="mfi_target_note">内置身份无需任何额外硬件。CH341 选项会与接在车机 USB 口上的真实 MFi 协处理器芯片通信，因此即使内置身份将来被 Apple 吊销也依然可用。更改在重新连接后生效。</string>
+</resources>

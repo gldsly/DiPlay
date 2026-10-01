@@ -1,0 +1,7 @@
+<resources>
+    <string name="mfi_authentication">MFi authentication</string>
+    <string name="mfi_target">Authentication source</string>
+    <string name="mfi_target_local">Built-in accessory identity</string>
+    <string name="mfi_target_ch341">CH341 bridge to an MFi chip</string>
+    <string name="mfi_target_note">The built-in identity needs no extra hardware. The CH341 option talks to a real MFi coprocessor wired to the head unit\'s USB port, so it keeps working even if the bundled identity is ever revoked by Apple. Changes apply on reconnect.</string>
+</resources>

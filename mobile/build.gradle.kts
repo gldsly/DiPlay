@@ -118,3 +118,35 @@ tasks.register("assembleStandaloneDebug") {
     description = "Build a standalone car-test APK with explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleDebug")
 }
+
+// Local build artefacts are named DiPlay_<version>_LB_<build number>.apk. The counter lives in the
+// repository root.
+val localBuildNumber =
+    (rootProject.file(".local-build-counter").takeIf { it.isFile }
+        ?.readText()?.trim()?.toIntOrNull() ?: 0) + 1
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            // The debug variant's versionName carries a "-hud-test" suffix; keep it out of the name.
+            val version = output.versionName.get().substringBefore('-')
+            (output as? com.android.build.api.variant.impl.VariantOutputImpl)
+                ?.outputFileName?.set("DiPlay_${version}_LB_$localBuildNumber.apk")
+        }
+    }
+}
+
+// A task action may only capture serialisable values, so the file and the number are bound as locals
+// here instead of being read from script-level properties inside doLast - that is what the
+// configuration cache rejects.
+val recordLocalBuildNumber by tasks.registering {
+    val counterFile = rootProject.file(".local-build-counter")
+    val recorded = localBuildNumber
+    doLast {
+        counterFile.writeText(recorded.toString())
+    }
+}
+
+tasks.matching { it.name.startsWith("assemble") }.configureEach {
+    finalizedBy(recordLocalBuildNumber)
+}

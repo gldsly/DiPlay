@@ -40,8 +40,22 @@ object AirPlayPersistence {
     private const val KEY_HEVC_SOFTWARE_DECODER = "hevc_software_decoder"
     private const val KEY_ADVANCED_AUDIO_CHANNEL_MAPPING = "advanced_audio_channel_mapping"
     private const val KEY_AUDIO_FOCUS_ENABLED = "audio_focus_enabled"
+    private const val KEY_NAVIGATION_DUCKS_MEDIA = "navigation_ducks_media"
     private const val KEY_MEDIA_AUDIO_CHANNEL = "media_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
+
+    /**
+     * Highest legacy stream ID the channel pickers accept. Android documents 1..10, but head
+     * units may expose further vehicle buses above that range; BYD guidance runs on 14.
+     */
+    const val MAX_LEGACY_AUDIO_CHANNEL = 20
+
+    /**
+     * BYD routes navigation guidance on stream 15 on the verified head units, so that is the
+     * default here. 0 means "let the platform route by usage"; any other value selects an explicit
+     * legacy stream. Media sits on 14 and telephony on 3 on the same units.
+     */
+    const val DEFAULT_NAVIGATION_AUDIO_CHANNEL = 15
     private const val KEY_NAVIGATION_STREAM_TYPE = "navigation_stream_type"
     private const val KEY_WIRELESS_ENABLED = "wireless_enabled"
     private const val KEY_WIRELESS_HOTSPOT_MODE = "wireless_hotspot_mode"
@@ -156,25 +170,36 @@ object AirPlayPersistence {
             .apply()
     }
 
+    /** Off by default: guidance simply overlays music, which is what this app has always done. */
+    fun loadNavigationDucksMedia(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_NAVIGATION_DUCKS_MEDIA, false)
+
+    fun saveNavigationDucksMedia(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_NAVIGATION_DUCKS_MEDIA, enabled)
+            .apply()
+    }
+
     fun loadMediaAudioChannel(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getInt(KEY_MEDIA_AUDIO_CHANNEL, 0)
-            .takeIf { it in 0..10 } ?: 0
+            .takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0
 
     fun saveMediaAudioChannel(context: Context, channel: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_MEDIA_AUDIO_CHANNEL, channel.takeIf { it in 0..10 } ?: 0)
+            .putInt(KEY_MEDIA_AUDIO_CHANNEL, channel.takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0)
             .apply()
     }
 
     fun loadNavigationAudioChannel(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_NAVIGATION_AUDIO_CHANNEL, 0)
-            .takeIf { it in 0..10 } ?: 0
+            .getInt(KEY_NAVIGATION_AUDIO_CHANNEL, DEFAULT_NAVIGATION_AUDIO_CHANNEL)
+            .takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: DEFAULT_NAVIGATION_AUDIO_CHANNEL
 
     fun saveNavigationAudioChannel(context: Context, channel: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_NAVIGATION_AUDIO_CHANNEL, channel.takeIf { it in 0..10 } ?: 0)
+            .putInt(KEY_NAVIGATION_AUDIO_CHANNEL, channel.takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0)
             .apply()
     }
 

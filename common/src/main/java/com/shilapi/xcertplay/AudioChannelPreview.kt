@@ -26,7 +26,7 @@ internal class AudioChannelPreview(private val onUnavailable: (Int) -> Unit) : C
 
     fun play(channel: Int, navigation: Boolean) {
         if (closed) return
-        require(channel in 0..10)
+        require(channel in 0..AirPlayPersistence.MAX_LEGACY_AUDIO_CHANNEL)
         val request = generation.incrementAndGet()
         pending?.cancel(true)
         activeTrack.get()?.let { runCatching { it.stop() } }
@@ -34,33 +34,12 @@ internal class AudioChannelPreview(private val onUnavailable: (Int) -> Unit) : C
             var track: AudioTrack? = null
             try {
                 if (closed || generation.get() != request) return@submit
-                val attributes = if (channel == 0) {
-                    AudioAttributes.Builder()
-                        .setUsage(if (navigation) AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
-                            else AudioAttributes.USAGE_MEDIA)
-                        .setContentType(if (navigation) AudioAttributes.CONTENT_TYPE_SPEECH
-                            else AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                } else {
-                    AudioAttributes.Builder().setLegacyStreamType(channel).build()
-                }
                 val pcm = tone()
                 val minimum = AudioTrack.getMinBufferSize(
                     SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
                 )
                 check(minimum > 0) { "No PCM output buffer is available" }
-                val built = AudioTrack.Builder()
-                    .setAudioAttributes(attributes)
-                    .setAudioFormat(
-                        AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(SAMPLE_RATE)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build(),
-                    )
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .setBufferSizeInBytes(maxOf(minimum, SAMPLE_RATE / 10 * 2))
-                    .build()
+                val built = buildTrack(channel, navigation, maxOf(minimum, SAMPLE_RATE / 10 * 2))
                 track = built
                 check(built.state == AudioTrack.STATE_INITIALIZED) { "Audio output did not initialize" }
                 if (closed || generation.get() != request) return@submit
@@ -100,6 +79,53 @@ internal class AudioChannelPreview(private val onUnavailable: (Int) -> Unit) : C
         activeTrack.get()?.let { runCatching { it.stop() } }
         worker.shutdownNow()
     }
+
+    /**
+     * Mirrors the routing CarPlay playback uses. Channel 0 goes through usage attributes; any
+     * other value uses the deprecated stream-type constructor, which is the only route that
+     * forwards IDs above Android's documented 1..10 range (BYD guidance runs on 14). A ROM that
+     * rejects the stream falls back to usage here exactly as the live session does.
+     */
+    private fun buildTrack(channel: Int, navigation: Boolean, bufferBytes: Int): AudioTrack {
+        if (channel == 0) return usageTrack(navigation, bufferBytes)
+        val legacy = try {
+            AudioTrack(
+                channel, SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, bufferBytes, AudioTrack.MODE_STREAM,
+            )
+        } catch (_: RuntimeException) {
+            null
+        }
+        if (legacy != null && legacy.state == AudioTrack.STATE_INITIALIZED) return legacy
+        legacy?.let { runCatching { it.release() } }
+        Log.w(TAG, "Legacy stream $channel rejected by this ROM; preview uses usage routing")
+        return usageTrack(navigation, bufferBytes)
+    }
+
+    private fun usageTrack(navigation: Boolean, bufferBytes: Int): AudioTrack =
+        AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(
+                        if (navigation) AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
+                        else AudioAttributes.USAGE_MEDIA,
+                    )
+                    .setContentType(
+                        if (navigation) AudioAttributes.CONTENT_TYPE_SPEECH
+                        else AudioAttributes.CONTENT_TYPE_MUSIC,
+                    )
+                    .build(),
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build(),
+            )
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .setBufferSizeInBytes(bufferBytes)
+            .build()
 
     private fun tone(): ByteArray {
         val sampleCount = SAMPLE_RATE * TONE_MILLIS / 1000

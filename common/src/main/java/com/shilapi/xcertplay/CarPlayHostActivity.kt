@@ -117,7 +117,9 @@ class CarPlayHostActivity : ComponentActivity() {
 
     // CH341 USB\VID_1A86&PID_5512&REV_0304 is the deployment-supplied bridge identity.
     private fun createRuntimeConfig(): CarPlayRuntimeConfig = CarPlayRuntimeConfig(
-        mfiTarget = MfiTarget.LOCAL,
+        // Honour the persisted choice instead of pinning LOCAL, so a CH341 bridge or a board I2C
+        // node can actually be used. The default stays LOCAL for installs without MFi hardware.
+        mfiTarget = mfiTarget,
         ch341Devices = if (mfiTarget == MfiTarget.USB_CH341) {
             listOf(UsbDeviceId(0x1a86, 0x5512))
         } else {
@@ -2963,6 +2965,7 @@ class CarPlayHostActivity : ComponentActivity() {
             navigationChannel = AirPlayPersistence.loadNavigationAudioChannel(this),
             context = this,
             navigationStreamType = navigationStreamType,
+            navigationDucksMedia = AirPlayPersistence.loadNavigationDucksMedia(this),
             onScreenStreamActiveChanged = { type, active ->
                 onScreenStreamStateChanged(controllerGeneration, type, active)
             },
@@ -3434,20 +3437,20 @@ class CarPlayHostActivity : ComponentActivity() {
                 gestureTracking = false
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (event.pointerCount == THREE_FINGER_COUNT && !gestureSequenceActive) {
+                if (event.pointerCount == SETTINGS_GESTURE_FINGER_COUNT && !gestureSequenceActive) {
                     gestureSequenceActive = true
                     gestureTracking = true
                     gestureStartX = pointerCentroid(event, horizontal = true)
                     gestureStartY = pointerCentroid(event, horizontal = false)
                     controller?.sendTouch(emptyList())
-                    appendLog("Three-finger swipe tracking started")
+                    appendLog("Settings gesture tracking started")
                     return true
                 }
             }
         }
 
         if (gestureSequenceActive) {
-            if (!gestureTracking || event.pointerCount != THREE_FINGER_COUNT) {
+            if (!gestureTracking || event.pointerCount != SETTINGS_GESTURE_FINGER_COUNT) {
                 if (event.actionMasked == MotionEvent.ACTION_UP ||
                     event.actionMasked == MotionEvent.ACTION_CANCEL
                 ) {
@@ -3462,8 +3465,8 @@ class CarPlayHostActivity : ComponentActivity() {
                 val deltaX = Math.abs(pointerCentroid(event, horizontal = true) - gestureStartX)
                 val deltaY = pointerCentroid(event, horizontal = false) - gestureStartY
                 if (
-                    deltaY >= dp(THREE_FINGER_SWIPE_DISTANCE_DP) &&
-                    deltaY >= deltaX * THREE_FINGER_SWIPE_DIRECTION_RATIO
+                    deltaY >= dp(SETTINGS_GESTURE_SWIPE_DISTANCE_DP) &&
+                    deltaY >= deltaX * SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO
                 ) {
                     gestureSequenceActive = false
                     gestureTracking = false
@@ -3658,9 +3661,11 @@ class CarPlayHostActivity : ComponentActivity() {
         const val AUDIO_CAPTURE_MARKER = "audio-capture.enabled"
         const val AUDIO_CAPTURE_DIRECTORY = "audio-captures"
         const val PROTOCOL_TRACE_PREFIX = "TRACE "
-        const val THREE_FINGER_COUNT = 3
-        const val THREE_FINGER_SWIPE_DISTANCE_DP = 72
-        const val THREE_FINGER_SWIPE_DIRECTION_RATIO = 1.15f
+        // Four fingers, not three: several BYD head units bind a three-finger swipe to their own
+        // climate panel, which stole the gesture before this activity ever saw it.
+        const val SETTINGS_GESTURE_FINGER_COUNT = 4
+        const val SETTINGS_GESTURE_SWIPE_DISTANCE_DP = 72
+        const val SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO = 1.15f
         const val MAX_SETTINGS_MENU_WIDTH_PX = 1200
         val MENU_BACKGROUND = Color.rgb(12, 16, 19)
         val MENU_SECONDARY = Color.rgb(170, 180, 190)
