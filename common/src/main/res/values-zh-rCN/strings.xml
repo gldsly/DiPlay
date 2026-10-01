@@ -307,14 +307,14 @@
     <string name="s_1000_ms_most_stable">1000 毫秒 · 更稳定</string>
     <string name="s_100_ms_lowest_latency">100 毫秒 · 延迟最低</string>
     <string name="s_200_ms">200 毫秒</string>
-    <string name="s_auto_follows_the_measured_jitter">自动 · 跟随实测抖动</string>
+    <string name="s_auto_follows_the_measured_jitter">自动 · 跟随实测抖动（默认）</string>
     <string name="s_1_0x">1.0x</string>
     <string name="s_1_choose_your_connection">1 · 选择连接方式</string>
     <string name="s_1_connect_a_computer_with_adb_installed_to_the_car_using">1. 用装有 ADB 的电脑，通过现有的 USB 或无线调试连接连接到车机。如有调试授权提示请批准。\n\n2. 在电脑终端中运行此命令：</string>
     <string name="s_1_open_car_hotspot_settings_turn_the_hotspot_on_and_sele">1. 打开车机热点设置，开启热点，如有 5 GHz 请选择。\n2. 在下方准确复制热点名称和密码。\n3. 连接时保持车机热点开启。DiPlay 通过蓝牙发送热点信息，iPhone 会自动加入。</string>
     <string name="s_2_4_ghz">2.4 GHz</string>
     <string name="s_2_pair_your_iphone">2 · 配对你的 iPhone</string>
-    <string name="s_300_ms_default">300 毫秒 · 默认</string>
+    <string name="s_300_ms_default">300 毫秒</string>
     <string name="s_30_fps_lighter_load">30 帧/秒 · 减轻负载</string>
     <string name="s_3_connect">3 · 连接</string>
     <string name="s_3_tap_check_and_enable_below_this_enables_the_cluster_ma">3. 点击下方“检查并启用”。这将启用仪表盘地图和自动主题跟随。正在进行的 CarPlay 会话会重新连接一次，之后即可断开电脑。</string>

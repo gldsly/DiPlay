@@ -6,10 +6,18 @@ package com.shilapi.xcertplay.media
  * outlasts them. Calls, Siri and navigation prompts keep the small low-latency buffer.
  */
 object MediaAudioBuffer {
+    /** The middle fixed window; no longer what a fresh install starts with. */
     const val DEFAULT_MILLIS = 300
 
     /** Stored choice that sizes the prebuffer from the arrival gaps this link actually shows. */
     const val AUTO_MILLIS = 0
+
+    /**
+     * What a fresh install starts with. Measured on the car: auto held the music steady for the whole
+     * run while the fixed windows still rebuffered, because it sizes the prebuffer from the arrival
+     * gaps this link actually shows instead of a number chosen in advance.
+     */
+    const val DEFAULT_CHOICE_MILLIS = AUTO_MILLIS
 
     /** Fixed windows, lowest latency first. */
     val presets = listOf(100, 200, DEFAULT_MILLIS, 500, 1000)
@@ -35,7 +43,7 @@ object MediaAudioBuffer {
     /** Decay applied to the remembered worst gap, in percent, so one stall does not pin the delay. */
     const val AUTO_DECAY_PERCENT = 98L
 
-    fun sanitize(millis: Int): Int = millis.takeIf { it in choices } ?: DEFAULT_MILLIS
+    fun sanitize(millis: Int): Int = millis.takeIf { it in choices } ?: DEFAULT_CHOICE_MILLIS
 
     /** Track capacity to request. Auto reserves room for the largest window it may select. */
     fun capacityMillis(storedMillis: Int): Int =

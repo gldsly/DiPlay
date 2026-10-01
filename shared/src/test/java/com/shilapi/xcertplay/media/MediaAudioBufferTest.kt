@@ -33,9 +33,13 @@ class MediaAudioBufferTest {
     }
 
     @Test
-    fun `unknown delay falls back to the default`() {
-        assertEquals(MediaAudioBuffer.DEFAULT_MILLIS, MediaAudioBuffer.sanitize(250))
-        assertEquals(57_600, MediaAudioBuffer.plan(true, 48_000, 2, 7_680, mediaMillis = 42).startBytes)
+    fun `unknown delay falls back to the default choice`() {
+        assertEquals(MediaAudioBuffer.DEFAULT_CHOICE_MILLIS, MediaAudioBuffer.sanitize(250))
+        assertEquals(MediaAudioBuffer.AUTO_MILLIS, MediaAudioBuffer.sanitize(250))
+        // An unrecognised value still has to produce a usable plan: the fallback is auto, which
+        // reserves its largest window for the track.
+        assertEquals(MediaAudioBuffer.AUTO_CAPACITY_MILLIS, MediaAudioBuffer.capacityMillis(42))
+        assertEquals(134_400, MediaAudioBuffer.plan(true, 48_000, 2, 7_680, mediaMillis = 42).startBytes)
     }
 
     @Test
