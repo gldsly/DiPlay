@@ -3647,7 +3647,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
         /** Bottom-left hot corner for the single-finger settings swipe, as a surface fraction. */
         const val SETTINGS_CORNER_WIDTH_FRACTION = 0.28f
-        const val SETTINGS_CORNER_HEIGHT_FRACTION = 0.30f
+        const val SETTINGS_CORNER_HEIGHT_FRACTION = 0.25f
         const val MAX_SETTINGS_MENU_WIDTH_PX = 1200
         val MENU_BACKGROUND = Color.rgb(12, 16, 19)
         val MENU_SECONDARY = Color.rgb(170, 180, 190)
