@@ -26,7 +26,7 @@ internal class AudioChannelPreview(private val onUnavailable: (Int) -> Unit) : C
 
     fun play(channel: Int, navigation: Boolean) {
         if (closed) return
-        require(channel in 0..AirPlayPersistence.MAX_LEGACY_AUDIO_CHANNEL)
+        require(channel in AirPlayPersistence.AUDIO_CHANNELS)
         val request = generation.incrementAndGet()
         pending?.cancel(true)
         activeTrack.get()?.let { runCatching { it.stop() } }

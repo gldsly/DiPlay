@@ -20,6 +20,8 @@ import java.io.File
 
 /** SharedPreferences persistence for the accessory identity and paired controllers. */
 object AirPlayPersistence {
+    /** 0 uses usage-based routing; 1–20 select stream types supported by the head unit. */
+    val AUDIO_CHANNELS = 0..20
     private const val PREFS = "xcertplay_airplay"
     private const val KEY_IDENT_PRIVATE = "identity_private"
     private const val KEY_IDENT_PUBLIC = "identity_public"
@@ -46,12 +48,6 @@ object AirPlayPersistence {
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
 
     /**
-     * Highest legacy stream ID the channel pickers accept. Android documents 1..10, but head
-     * units may expose further vehicle buses above that range; BYD guidance runs on 14.
-     */
-    const val MAX_LEGACY_AUDIO_CHANNEL = 20
-
-    /**
      * BYD routes navigation guidance on stream 15 on the verified head units, so that is the
      * default here. 0 means "let the platform route by usage"; any other value selects an explicit
      * legacy stream. Media sits on 14 and telephony on 3 on the same units.
@@ -72,6 +68,8 @@ object AirPlayPersistence {
     private const val KEY_FPS = "display_fps"
     private const val KEY_MEDIA_BUFFER_MS = "media_buffer_ms"
     private const val KEY_CLUSTER_MAP = "cluster_map_enabled"
+    private const val KEY_CENTER_MAP_OVERLAY = "center_map_overlay"
+    private const val KEY_LAUNCHER_MAP_SHARING = "launcher_map_sharing"
     private const val KEY_CLUSTER_MAP_SCALE = "cluster_map_scale_percent"
     private const val KEY_CLUSTER_CONTENT = "cluster_content"
     private const val KEY_CLUSTER_MARKER_X = "cluster_marker_horizontal_step"
@@ -200,22 +198,27 @@ object AirPlayPersistence {
     fun loadMediaAudioChannel(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getInt(KEY_MEDIA_AUDIO_CHANNEL, 0)
-            .takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0
+            .takeIf { it in AUDIO_CHANNELS } ?: 0
 
     fun saveMediaAudioChannel(context: Context, channel: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_MEDIA_AUDIO_CHANNEL, channel.takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0)
+            .putInt(KEY_MEDIA_AUDIO_CHANNEL, channel.takeIf { it in AUDIO_CHANNELS } ?: 0)
             .apply()
     }
 
-    fun loadNavigationAudioChannel(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_NAVIGATION_AUDIO_CHANNEL, DEFAULT_NAVIGATION_AUDIO_CHANNEL)
-            .takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: DEFAULT_NAVIGATION_AUDIO_CHANNEL
+    fun loadNavigationAudioChannel(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // BYD routes guidance on stream 15, so that is where an untouched install lands. Inherit the
+        // legacy key only when this one is absent, so a fresh install and an explicit 0 still differ.
+        return prefs.getInt(
+            KEY_NAVIGATION_AUDIO_CHANNEL,
+            prefs.getInt(KEY_NAVIGATION_STREAM_TYPE, DEFAULT_NAVIGATION_AUDIO_CHANNEL),
+        ).takeIf { it in AUDIO_CHANNELS } ?: DEFAULT_NAVIGATION_AUDIO_CHANNEL
+    }
 
     fun saveNavigationAudioChannel(context: Context, channel: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_NAVIGATION_AUDIO_CHANNEL, channel.takeIf { it in 0..MAX_LEGACY_AUDIO_CHANNEL } ?: 0)
+            .putInt(KEY_NAVIGATION_AUDIO_CHANNEL, channel.takeIf { it in AUDIO_CHANNELS } ?: 0)
             .apply()
     }
 
@@ -496,6 +499,32 @@ object AirPlayPersistence {
 
     fun saveClusterMapEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CLUSTER_MAP, enabled).apply()
+    }
+
+    /** The dashboard map as a card on the centre screen while DiPlay is in the background. */
+    fun loadCenterMapOverlay(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CENTER_MAP_OVERLAY, false)
+
+    /** Other launchers may show the live dashboard map in their own screen (MapEmbedService). */
+    fun loadLauncherMapSharing(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LAUNCHER_MAP_SHARING, false)
+
+    fun saveLauncherMapSharing(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_LAUNCHER_MAP_SHARING, enabled).apply()
+    }
+
+    /** Observe consent changes for already attached launcher maps; call the returned function to unregister. */
+    internal fun observeLauncherMapSharing(context: Context, changed: (Boolean) -> Unit): () -> Unit {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_LAUNCHER_MAP_SHARING) changed(loadLauncherMapSharing(context))
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    fun saveCenterMapOverlay(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CENTER_MAP_OVERLAY, enabled).apply()
     }
 
     fun loadClusterContent(context: Context): CarPlayClusterDisplay.Content =
