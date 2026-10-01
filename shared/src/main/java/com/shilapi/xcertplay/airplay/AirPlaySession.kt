@@ -639,6 +639,12 @@ class AirPlaySession(
     }
 
     private fun openEvent(): Int {
+        // Release any previous listener first. A ServerSocket that is merely dropped keeps its accept
+        // thread blocked forever: accept() does not react to interrupts, so only closing the socket
+        // ends it. In practice openTiming() already rejects a second data-plane SETUP, but relying on
+        // that ordering would be fragile.
+        safeClose(eventServer)
+        eventServer = null
         val server = ServerSocket(0, 50, InetAddress.getByName("::"))
         eventServer = server
         spawnEvent("airplay-event-accept") { acceptEvent(server) }
