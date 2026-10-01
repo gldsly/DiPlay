@@ -336,10 +336,6 @@ class CarPlayHostActivity : ComponentActivity() {
     private var restartGeneration = 0
     private var reconnectScheduled = false
     private var sessionLog: SessionLogFile? = null
-    private var gestureSequenceActive = false
-    private var gestureTracking = false
-    private var gestureStartX = 0f
-    private var gestureStartY = 0f
     private var cornerGestureActive = false
     private var cornerGestureStartX = 0f
     private var cornerGestureStartY = 0f
@@ -3468,52 +3464,6 @@ class CarPlayHostActivity : ComponentActivity() {
             MotionEvent.ACTION_CANCEL -> cornerGestureActive = false
         }
 
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                gestureSequenceActive = false
-                gestureTracking = false
-            }
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                if (event.pointerCount == SETTINGS_GESTURE_FINGER_COUNT && !gestureSequenceActive) {
-                    gestureSequenceActive = true
-                    gestureTracking = true
-                    gestureStartX = pointerCentroid(event, horizontal = true)
-                    gestureStartY = pointerCentroid(event, horizontal = false)
-                    controller?.sendTouch(emptyList())
-                    appendLog("Settings gesture tracking started")
-                    return true
-                }
-            }
-        }
-
-        if (gestureSequenceActive) {
-            if (!gestureTracking || event.pointerCount != SETTINGS_GESTURE_FINGER_COUNT) {
-                if (event.actionMasked == MotionEvent.ACTION_UP ||
-                    event.actionMasked == MotionEvent.ACTION_CANCEL
-                ) {
-                    gestureSequenceActive = false
-                    gestureTracking = false
-                } else if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) {
-                    gestureTracking = false
-                }
-                return true
-            }
-            if (event.actionMasked == MotionEvent.ACTION_MOVE) {
-                val deltaX = Math.abs(pointerCentroid(event, horizontal = true) - gestureStartX)
-                val deltaY = pointerCentroid(event, horizontal = false) - gestureStartY
-                if (
-                    deltaY >= dp(SETTINGS_GESTURE_SWIPE_DISTANCE_DP) &&
-                    deltaY >= deltaX * SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO
-                ) {
-                    gestureSequenceActive = false
-                    gestureTracking = false
-                    openSettingsMenu()
-                    return true
-                }
-            }
-            return true
-        }
-
         val contacts = CarPlayTouchMapper.contacts(event, view.width, view.height)
         val queued = controller?.sendTouch(contacts) ?: false
         when (event.actionMasked) {
@@ -3528,14 +3478,6 @@ class CarPlayHostActivity : ComponentActivity() {
             )
         }
         return true
-    }
-
-    private fun pointerCentroid(event: MotionEvent, horizontal: Boolean): Float {
-        var total = 0f
-        for (index in 0 until event.pointerCount) {
-            total += if (horizontal) event.getX(index) else event.getY(index)
-        }
-        return total / event.pointerCount
     }
 
     private fun onScreenStreamStateChanged(generation: Int, type: Int, active: Boolean) {
@@ -3700,7 +3642,6 @@ class CarPlayHostActivity : ComponentActivity() {
         const val PROTOCOL_TRACE_PREFIX = "TRACE "
         // Four fingers, not three: several BYD head units bind a three-finger swipe to their own
         // climate panel, which stole the gesture before this activity ever saw it.
-        const val SETTINGS_GESTURE_FINGER_COUNT = 4
         const val SETTINGS_GESTURE_SWIPE_DISTANCE_DP = 72
         const val SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO = 1.15f
 
