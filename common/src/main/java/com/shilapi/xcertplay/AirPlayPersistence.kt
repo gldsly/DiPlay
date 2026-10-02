@@ -44,6 +44,7 @@ object AirPlayPersistence {
     private const val KEY_AUDIO_FOCUS_ENABLED = "audio_focus_enabled"
     private const val KEY_NAVIGATION_DUCKS_MEDIA = "navigation_ducks_media"
     private const val KEY_PHONE_DIAGNOSTIC_CAPTURE = "phone_diagnostic_capture"
+    private const val KEY_VERBOSE_DIAGNOSTICS = "verbose_diagnostics"
     private const val KEY_MEDIA_AUDIO_CHANNEL = "media_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
 
@@ -192,6 +193,20 @@ object AirPlayPersistence {
     fun savePhoneDiagnosticCapture(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_PHONE_DIAGNOSTIC_CAPTURE, enabled)
+            .apply()
+    }
+
+    /**
+     * Also write the periodic stats lines (audio, video, receive) into the session log. Off by
+     * default: they arrive every few seconds per stream and only help while investigating a problem.
+     */
+    fun loadVerboseDiagnostics(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_VERBOSE_DIAGNOSTICS, false)
+
+    fun saveVerboseDiagnostics(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_VERBOSE_DIAGNOSTICS, enabled)
             .apply()
     }
 

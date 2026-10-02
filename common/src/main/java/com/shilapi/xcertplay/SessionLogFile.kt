@@ -5,6 +5,13 @@ import java.io.File
 
 /** Bounded, private diagnostics. Each write is redacted before touching storage. */
 internal class SessionLogFile(val file: File) : Closeable {
+    /**
+     * Periodic stats lines are only written while this is on. Audio, video and receive stats arrive
+     * every few seconds per stream and matter only while investigating, so an ordinary session keeps
+     * to state changes, warnings and errors. Toggled in Settings - Diagnostics.
+     */
+    var verbose: Boolean = false
+
     private val lock = Any()
     private var closed = false
     fun reset(header: String) = synchronized(lock) {
@@ -17,6 +24,7 @@ internal class SessionLogFile(val file: File) : Closeable {
     }
     fun append(line: String) = synchronized(lock) {
         if (closed) return@synchronized
+        if (!verbose && isPeriodicStats(line)) return@synchronized
         val safe = DiagnosticRedactor.redact(line) ?: return@synchronized
         runCatching {
             if (file.length() > MAX_BYTES) {
@@ -49,5 +57,17 @@ internal class SessionLogFile(val file: File) : Closeable {
         const val MAX_BYTES = 512 * 1024L
         private val ARCHIVE_NAMES = listOf("previous.log") + (2..7).map { "previous-$it.log" }
         val REPORT_NAMES = ARCHIVE_NAMES.reversed() + "diplay.log"
+
+        /** The prefix the host adds before handing a line over; see formattedLogLine. */
+        private val TIMESTAMP = Regex("^\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\s+")
+
+        /** Lines the stream builders emit every few seconds, with or without that prefix. */
+        internal fun isPeriodicStats(line: String): Boolean {
+            val body = line.replaceFirst(TIMESTAMP, "")
+            return body.startsWith("audio stats") ||
+                body.startsWith("video stats") ||
+                body.startsWith("Video: video stats") ||
+                body.startsWith("Receive:")
+        }
     }
 }

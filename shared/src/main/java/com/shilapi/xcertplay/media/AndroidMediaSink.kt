@@ -1481,7 +1481,7 @@ private class AudioRenderer(
             "lastWriteError=${lastWriteErrorCode ?: "none"} zeroWrites=$zeroWritesThisWindow " +
             "partialWrites=$partialWritesThisWindow " +
             "decoderDroppedTotal=$inputDropped outputBuffersTotal=$outputBuffers rebuffers=$rebufferCount ended=$force"
-        Log.i(STATS_TAG, line)
+        Log.d(STATS_TAG, line)
         report(line)
         statsLastUnderruns = underruns
         maxWriteMs = 0L

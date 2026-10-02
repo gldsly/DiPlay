@@ -64,4 +64,36 @@ class SessionLogFileTest {
         log.append("after")
         assertEquals("before\n", file.readText())
     }
+
+    @Test
+    fun `only the periodic builders count as stats`() {
+        assertTrue(SessionLogFile.isPeriodicStats("06:49:57.999  audio stats audioType=media"))
+        assertTrue(SessionLogFile.isPeriodicStats("audio stats audioType=media"))
+        assertTrue(SessionLogFile.isPeriodicStats("06:49:57.999  Video: video stats rx=30.0fps"))
+        assertTrue(SessionLogFile.isPeriodicStats("06:49:57.999  Receive: main packets=10"))
+        assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Audio: ready audioType=media"))
+        assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Display detected: 1920x900"))
+    }
+
+    @Test
+    fun `periodic stats are dropped until verbose is on`() {
+        val directory = freshDirectory()
+        val file = File(directory, "diplay.log")
+        val log = SessionLogFile(file)
+
+        log.append("06:49:57.999  audio stats audioType=media underruns=+0")
+        log.append("06:49:58.001  Video: video stats rx=30.0fps shown=30.0fps")
+        log.append("06:49:58.002  Receive: main packets=10 bytes=100")
+        log.append("06:49:58.003  Audio: ready audioType=media")
+
+        val quiet = file.readText()
+        assertTrue(quiet.contains("Audio: ready"))
+        assertFalse(quiet.contains("audio stats"))
+        assertFalse(quiet.contains("video stats"))
+        assertFalse(quiet.contains("Receive:"))
+
+        log.verbose = true
+        log.append("06:49:59.000  audio stats audioType=media underruns=+0")
+        assertTrue(file.readText().contains("audio stats"))
+    }
 }

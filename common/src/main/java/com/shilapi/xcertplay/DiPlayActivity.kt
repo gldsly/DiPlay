@@ -309,6 +309,11 @@ class DiPlayActivity : ComponentActivity() {
                 AirPlayPersistence.loadPhoneDiagnosticCapture(this)) {
                 AirPlayPersistence.savePhoneDiagnosticCapture(this, it)
             }
+            toggle(card, getString(R.string.verbose_diagnostics),
+                getString(R.string.verbose_diagnostics_desc),
+                AirPlayPersistence.loadVerboseDiagnostics(this)) {
+                AirPlayPersistence.saveVerboseDiagnostics(this, it)
+            }
         }
         section(content, getString(R.string.automatic_connection), R.drawable.ic_dp_automation) { card ->
             toggle(card, getString(R.string.connect_when_diplay_opens), getString(R.string.use_your_last_connection_type_and_selected_iphone), DiPlayPreferences.autoConnect(this)) { DiPlayPreferences.saveAutoConnect(this, it) }
