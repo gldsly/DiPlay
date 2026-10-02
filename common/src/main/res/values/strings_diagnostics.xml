@@ -1,6 +1,8 @@
 <resources>
     <string name="phone_diagnostic_capture">Capture the iPhone log</string>
     <string name="phone_diagnostic_capture_desc">Reads the iPhone\'s own system log while a cabled connection is being set up, keeping accessory and authentication lines for two minutes. Only useful when an MFi handshake fails; leave it off otherwise.</string>
-    <string name="verbose_diagnostics">Write periodic stats</string>
-    <string name="verbose_diagnostics_desc">Also writes the audio, video and receive statistics lines, which arrive every few seconds while a stream runs. Only needed while investigating a problem: the log fills and rotates about four times faster, and the stats add nothing once playback is stable.</string>
+    <string name="log_level">Log level</string>
+    <string name="log_level_normal">Normal</string>
+    <string name="log_level_debug">Debug</string>
+    <string name="log_level_desc">Normal records state changes, warnings and errors. Debug adds the audio, video and receive statistics, which arrive every few seconds while a stream runs and fill the log about four times faster - useful only while investigating a problem.</string>
 </resources>

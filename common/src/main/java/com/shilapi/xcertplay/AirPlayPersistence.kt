@@ -22,6 +22,10 @@ import java.io.File
 object AirPlayPersistence {
     /** 0 uses usage-based routing; 1–20 select stream types supported by the head unit. */
     val AUDIO_CHANNELS = 0..20
+
+    /** How much the session log keeps; see loadDiagnosticLevel. */
+    const val DIAGNOSTIC_LEVEL_NORMAL = 0
+    const val DIAGNOSTIC_LEVEL_DEBUG = 1
     private const val PREFS = "xcertplay_airplay"
     private const val KEY_IDENT_PRIVATE = "identity_private"
     private const val KEY_IDENT_PUBLIC = "identity_public"
@@ -44,6 +48,8 @@ object AirPlayPersistence {
     private const val KEY_AUDIO_FOCUS_ENABLED = "audio_focus_enabled"
     private const val KEY_NAVIGATION_DUCKS_MEDIA = "navigation_ducks_media"
     private const val KEY_PHONE_DIAGNOSTIC_CAPTURE = "phone_diagnostic_capture"
+    private const val KEY_DIAGNOSTIC_LEVEL = "diagnostic_level"
+    /** Superseded by KEY_DIAGNOSTIC_LEVEL; still read once so an old choice carries over. */
     private const val KEY_VERBOSE_DIAGNOSTICS = "verbose_diagnostics"
     private const val KEY_MEDIA_AUDIO_CHANNEL = "media_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
@@ -197,16 +203,33 @@ object AirPlayPersistence {
     }
 
     /**
-     * Also write the periodic stats lines (audio, video, receive) into the session log. Off by
-     * default: they arrive every few seconds per stream and only help while investigating a problem.
+     * How much the session log keeps. Normal records state changes, warnings and errors; debug adds
+     * the periodic stats lines (audio, video, receive), which arrive every few seconds per stream and
+     * only help while investigating a problem.
      */
-    fun loadVerboseDiagnostics(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_VERBOSE_DIAGNOSTICS, false)
+    fun loadDiagnosticLevel(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_DIAGNOSTIC_LEVEL)) {
+            return if (prefs.getInt(KEY_DIAGNOSTIC_LEVEL, DIAGNOSTIC_LEVEL_NORMAL) == DIAGNOSTIC_LEVEL_DEBUG) {
+                DIAGNOSTIC_LEVEL_DEBUG
+            } else {
+                DIAGNOSTIC_LEVEL_NORMAL
+            }
+        }
+        // Carry over the one-off boolean this replaced, so an existing choice is not lost.
+        return if (prefs.getBoolean(KEY_VERBOSE_DIAGNOSTICS, false)) {
+            DIAGNOSTIC_LEVEL_DEBUG
+        } else {
+            DIAGNOSTIC_LEVEL_NORMAL
+        }
+    }
 
-    fun saveVerboseDiagnostics(context: Context, enabled: Boolean) {
+    fun saveDiagnosticLevel(context: Context, level: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean(KEY_VERBOSE_DIAGNOSTICS, enabled)
+            .putInt(
+                KEY_DIAGNOSTIC_LEVEL,
+                if (level == DIAGNOSTIC_LEVEL_DEBUG) DIAGNOSTIC_LEVEL_DEBUG else DIAGNOSTIC_LEVEL_NORMAL,
+            )
             .apply()
     }
 

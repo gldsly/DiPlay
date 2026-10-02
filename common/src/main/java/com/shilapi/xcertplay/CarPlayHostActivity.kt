@@ -3767,8 +3767,9 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun initializeSessionLog() {
         val logFile = File(File(filesDir, "logs"), "diplay.log")
         val activeLog = SessionLogFile(logFile)
-        // Periodic stats lines stop by default; Settings - Diagnostics turns them back on.
-        activeLog.verbose = AirPlayPersistence.loadVerboseDiagnostics(this)
+        // The periodic stats lines are debug-level; Settings - Diagnostics picks the level.
+        activeLog.verbose =
+            AirPlayPersistence.loadDiagnosticLevel(this) == AirPlayPersistence.DIAGNOSTIC_LEVEL_DEBUG
         runCatching {
             activeLog.reset(
                 "DiPlay log started " +

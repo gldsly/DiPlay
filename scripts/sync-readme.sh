@@ -86,8 +86,8 @@ read -r -d '' ZH_DIFFS <<'ZH' || true
 - **导航音频**：导航声道默认 15（本车实测值，上游默认自动路由）；「导航压低音乐」与「音频焦点」
   互斥，因为两者调整的是同一个音乐音量。
 - **诊断**：导航输出被迫停止、日志过期回调、Activity 线程池泄漏现在都会明确记录或释放，不再静默。
-- **日志级别**：音频、视频与接收的周期统计行属于 debug 级别，默认不写进日志——正常会话只记录状态变化、
-  警告与错误。需要排查时可在「设置 → 诊断 → 记录周期统计」打开，此时日志约快四倍写满并轮转。
+- **日志级别**：可在「设置 → 诊断」选择日志级别：普通（默认）只记录状态变化、警告与错误，调试级别额外记录
+  音频、视频与接收的周期统计行，日志约快四倍写满。两种级别下导出的报告都会把全部切分文件合并在一起。
 
 ## 来源与致谢
 
@@ -120,10 +120,9 @@ plus whatever upstream has released since the fork point; everything else is ups
   exclusive, because both adjust the same music volume.
 - **Diagnostics.** A guidance output that had to stop, the log-expiry callback and the activity's
   thread pools now say so instead of leaking quietly.
-- **Log level.** The periodic audio, video and receive stats lines are debug-level and stay out of
-  the log by default, so an ordinary session records state changes, warnings and errors only.
-  Settings - Diagnostics - "Write periodic stats" brings them back for a problem report, and the log
-  then fills and rotates about four times faster.
+- **Log level.** Settings - Diagnostics picks the level: Normal (the default) records state changes,
+  warnings and errors, while Debug adds the periodic audio, video and receive stats lines and fills
+  the log about four times faster. Reports merge every rotated file at either level.
 EN
 
 # Upstream's own file names are kept, so an upstream README edit conflicts only in the header and the

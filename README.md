@@ -94,7 +94,6 @@ plus whatever upstream has released since the fork point; everything else is ups
   exclusive, because both adjust the same music volume.
 - **Diagnostics.** A guidance output that had to stop, the log-expiry callback and the activity's
   thread pools now say so instead of leaking quietly.
-- **Log level.** The periodic audio, video and receive stats lines are debug-level and stay out of
-  the log by default, so an ordinary session records state changes, warnings and errors only.
-  Settings - Diagnostics - "Write periodic stats" brings them back for a problem report, and the log
-  then fills and rotates about four times faster.
+- **Log level.** Settings - Diagnostics picks the level: Normal (the default) records state changes,
+  warnings and errors, while Debug adds the periodic audio, video and receive stats lines and fills
+  the log about four times faster. Reports merge every rotated file at either level.
