@@ -27,14 +27,22 @@ internal class SessionLogFile(val file: File) : Closeable {
         }
         Unit
     }
+    /**
+     * Renames the archives inside their own directory instead of copying them. The previous version
+     * copied up to 3.5 MB while holding the write lock, and the line that triggers a rotation can be
+     * an audio stats line, which arrives on the playback thread.
+     */
     private fun rotate() {
         if (!file.exists() || file.length() == 0L) return
+        File(file.parentFile, ARCHIVE_NAMES.last()).delete()
         for (index in ARCHIVE_NAMES.lastIndex downTo 1) {
             val source = File(file.parentFile, ARCHIVE_NAMES[index - 1])
+            if (!source.exists()) continue
             val destination = File(file.parentFile, ARCHIVE_NAMES[index])
-            if (source.exists()) source.copyTo(destination, overwrite = true)
+            if (!source.renameTo(destination)) source.copyTo(destination, overwrite = true)
         }
-        file.copyTo(File(file.parentFile, ARCHIVE_NAMES.first()), overwrite = true)
+        val oldest = File(file.parentFile, ARCHIVE_NAMES.first())
+        if (!file.renameTo(oldest)) file.copyTo(oldest, overwrite = true)
     }
     override fun close() = synchronized(lock) { closed = true }
     companion object {
