@@ -41,7 +41,7 @@ internal object BydClusterBridge {
         } catch (_: PackageManager.NameNotFoundException) {
             false
         }
-        if (!available && appContext.packageName.endsWith(".hudtest")) {
+        if (!available && DiPlayPackages.isCarTest(appContext.packageName)) {
             factory = BydFactoryNavigationOutput(appContext.applicationContext)
             available = true
         }

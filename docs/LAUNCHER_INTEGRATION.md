@@ -54,7 +54,7 @@ In DiPlay settings, under the dashboard map, turn on **Dashboard map on the cent
   adb shell appops set com.shihab.diplay GET_USAGE_STATS allow
   ```
 
-(Test builds use the package `com.shihab.diplay.hudtest`.)
+(Test builds use the package `com.shihab.diplay.sealion_05_dmi`.)
 
 The card is a separate decoder for the same stream, so the dashboard keeps its map. While the card shows the map, "Dashboard map only in Small and Full navi" does not pause the stream. If a launcher embeds the map (section 3), the card stays hidden.
 

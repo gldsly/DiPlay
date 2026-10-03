@@ -39,7 +39,9 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".hudtest"
+            // Car-test build for this head unit. Keep in step with DiPlayPackages.CAR_TEST_SUFFIX:
+            // the BYD integrations compare the running package name against it.
+            applicationIdSuffix = ".sealion_05_dmi"
             versionNameSuffix = "-hud-test"
         }
         release {
