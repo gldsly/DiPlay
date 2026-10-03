@@ -1,0 +1,8 @@
+<resources>
+    <!--
+      Header action on a page opened over CarPlay. It names the destination instead of saying
+      "Back", because leaving the settings panel lands on the projection and not on the app home
+      page. Kept short on purpose: the header button is 130 dp wide.
+    -->
+    <string name="back_to_carplay">CarPlay</string>
+</resources>

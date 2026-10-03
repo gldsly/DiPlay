@@ -52,6 +52,14 @@ import kotlin.math.roundToInt
 class DiPlayActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var page = "home"
+    /**
+     * True while this page was opened over the projection. Back then returns to CarPlay instead of
+     * this app's home screen, and disconnecting from the panel clears it - once the session is gone,
+     * home is the only page left to return to.
+     */
+    private var returnToProjection = false
+    private var settingsDisconnectButton: Button? = null
+    private var panelReturnButton: Button? = null
     private var pendingCarHotspotSetup = false
     private var setupError: String? = null
     private var status: TextView? = null
@@ -110,11 +118,13 @@ class DiPlayActivity : ComponentActivity() {
         }
         pendingCarHotspotSetup = savedInstanceState?.getBoolean("pending_car_hotspot") ?: false
         page = savedInstanceState?.getString("page") ?: intent.getStringExtra("page") ?: "home"
+        returnToProjection = savedInstanceState?.getBoolean("return_to_projection")
+            ?: intent.getBooleanExtra(EXTRA_FROM_PROJECTION, false)
         render()
         handleWirelessRecovery()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (page != "home") { page = "home"; render() }
+                if (page != "home") leavePage()
                 else { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true }
             }
         })
@@ -122,10 +132,12 @@ class DiPlayActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
-        page = intent.getStringExtra("page") ?: "home"; render()
+        page = intent.getStringExtra("page") ?: "home"
+        returnToProjection = intent.getBooleanExtra(EXTRA_FROM_PROJECTION, false)
+        render()
         handleWirelessRecovery()
     }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putString("page", page); outState.putBoolean("pending_car_hotspot", pendingCarHotspotSetup); super.onSaveInstanceState(outState) }
+    override fun onSaveInstanceState(outState: Bundle) { outState.putString("page", page); outState.putBoolean("return_to_projection", returnToProjection); outState.putBoolean("pending_car_hotspot", pendingCarHotspotSetup); super.onSaveInstanceState(outState) }
     override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); render() }
     private fun openOverlayPermission() {
         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
@@ -190,17 +202,20 @@ class DiPlayActivity : ComponentActivity() {
     }
 
     private fun render() {
-        status = null; connectButton = null; disconnectButton = null; lastRunning = null
+        status = null; connectButton = null; disconnectButton = null; settingsDisconnectButton = null
+        panelReturnButton = null; lastRunning = null
         val scroll = ScrollView(this).apply { setBackgroundColor(BG); isFillViewport = true; clipToPadding = false }
         val content = column().apply { setPadding(dp(32), dp(24), dp(32), dp(32)) }
         scroll.addView(content)
         val header = row().apply { gravity = Gravity.CENTER_VERTICAL }
         header.addView(ImageView(this).apply { setImageResource(R.drawable.ic_carplay); contentDescription = getString(R.string.carplay) }, LinearLayout.LayoutParams(dp(36), dp(36)))
         header.addView(label(getString(R.string.diplay), 26, TEXT, true).apply { setPadding(dp(12), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        header.addView(button(if (page == "home") getString(R.string.car_home) else getString(R.string.back), false) {
+        val panelReturn = button(headerActionLabel(), false) {
             if (page == "home") startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
-            else { page = "home"; render() }
-        }, LinearLayout.LayoutParams(dp(130), dp(56)))
+            else leavePage()
+        }
+        header.addView(panelReturn, LinearLayout.LayoutParams(dp(130), dp(56)))
+        panelReturnButton = panelReturn
         content.addView(header)
         content.addView(space(24))
         when (page) {
@@ -211,6 +226,42 @@ class DiPlayActivity : ComponentActivity() {
         }
         setContentView(scroll)
         refreshStatus()
+    }
+
+    /**
+     * Header action label. On the home page it opens the car's own launcher; on a sub-page opened
+     * over the projection it names the destination, so leaving the panel visibly returns to CarPlay.
+     */
+    private fun headerActionLabel(): String = when {
+        page == "home" -> getString(R.string.car_home)
+        returnToProjection -> getString(R.string.back_to_carplay)
+        else -> getString(R.string.back)
+    }
+
+    /**
+     * Leaves a sub-page. The panel was opened over CarPlay with FLAG_ACTIVITY_REORDER_TO_FRONT, so
+     * the host sits directly underneath and finishing lands on the projection again. Without that
+     * origin - or after disconnecting from the panel - the app's own home page is the way back.
+     */
+    private fun leavePage() {
+        if (returnToProjection) { finish(); return }
+        page = "home"
+        render()
+    }
+
+    private fun updateHeaderAction() {
+        panelReturnButton?.text = headerActionLabel()
+    }
+
+    /**
+     * Disconnects without leaving the panel. The return target switches to the app's home page in the
+     * same step: the session is going away, so Back must not try to reach CarPlay for it.
+     */
+    private fun disconnectFromPanel() {
+        settingsDisconnectButton?.isEnabled = false
+        returnToProjection = false
+        updateHeaderAction()
+        CarPlayBackgroundSession.stop { runOnUiThread { refreshStatus() } }
     }
 
     private fun home(content: LinearLayout) {
@@ -286,6 +337,12 @@ class DiPlayActivity : ComponentActivity() {
     }
 
     private fun settings(content: LinearLayout) {
+        // First thing on the page: the panel is opened over a live CarPlay session, so disconnecting
+        // from here must not require going back to the home page first.
+        settingsDisconnectButton = button(getString(R.string.disconnect), false) { disconnectFromPanel() }
+            .apply { visibility = View.GONE }
+        content.addView(settingsDisconnectButton, matchButton(0, 60))
+        content.addView(space(20))
         content.addView(label(getString(R.string.your_drive_your_way), 34, TEXT, true))
         content.addView(label(getString(R.string.apply_reconnects_carplay_for_size_resolution_music_buffer), 17, MUTED).apply { setPadding(0, dp(8), 0, dp(24)) })
         section(content, getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
@@ -1090,6 +1147,8 @@ class DiPlayActivity : ComponentActivity() {
             connectButton?.text = if (running) getString(R.string.open_carplay) else getString(R.string.connect_phone)
             disconnectButton?.visibility = if (running) View.VISIBLE else View.GONE
             disconnectButton?.isEnabled = true
+            settingsDisconnectButton?.visibility = if (running) View.VISIBLE else View.GONE
+            settingsDisconnectButton?.isEnabled = true
             lastRunning = running
         }
         connectButton?.isEnabled = setupError == null
@@ -1381,6 +1440,12 @@ class DiPlayActivity : ComponentActivity() {
     private fun space(height: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(height)) }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     companion object {
+        /**
+         * Set by the projection host when it opens this page over CarPlay. It tells the panel that
+         * Back means "return to the projection" rather than "return to this app's home page".
+         */
+        const val EXTRA_FROM_PROJECTION = "from_projection"
+
         private val BG = Color.rgb(12, 17, 27)
         private val SURFACE = Color.rgb(21, 30, 44)
         private val BORDER = Color.rgb(42, 56, 75)

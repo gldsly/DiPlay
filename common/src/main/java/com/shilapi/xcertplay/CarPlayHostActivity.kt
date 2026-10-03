@@ -3549,8 +3549,11 @@ class CarPlayHostActivity : ComponentActivity() {
 
     private fun showDiPlayHome(page: String = "home") {
         controller?.sendTouch(emptyList())
+        // Opened over the projection: the page returns to CarPlay from its header, not to the app home.
         startActivity(Intent(this, DiPlayActivity::class.java)
-            .putExtra("page", page).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            .putExtra("page", page)
+            .putExtra(DiPlayActivity.EXTRA_FROM_PROJECTION, true)
+            .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
 
     private fun openSettingsMenu() = showDiPlayHome("settings")

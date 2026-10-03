@@ -75,6 +75,8 @@ read -r -d '' ZH_DIFFS <<'ZH' || true
 本 fork 与上游是同一个应用：差异只有一组上游尚未包含的修复，加上从 fork 点之后合并进来的上游
 新代码，其余部分与上游一致。
 
+- **CarPlay 上的设置面板**：面板最顶部就是「断开连接」，连接中不必先回主页再断开；面板右上角直接
+  返回 CarPlay 画面。若在面板里断开了连接，返回则回到 app 主页。
 - **设置往返**：从设置页返回不再重建 CarPlay 会话；车机顶部/底部状态栏改为两个独立开关，两个界面
   遵循同一策略。
 - **音乐缓冲**：新增 100 / 200 毫秒档，以及按实测到达间隔自适应的「自动」档。**默认自动**——车
@@ -105,6 +107,9 @@ read -r -d '' EN_DIFFS <<'EN' || true
 This fork is the same app. The differences are a small set of fixes upstream does not have yet,
 plus whatever upstream has released since the fork point; everything else is upstream code.
 
+- **Settings over CarPlay.** The panel starts with Disconnect, so a live session ends without going
+  back to the home page first, and its header action returns to CarPlay. Disconnecting from the panel
+  switches that return to this app's home page.
 - **Settings round trip.** Leaving the settings screen no longer restarts the CarPlay session, and
   the head unit's top and bottom bars are separate switches that both screens follow.
 - **Music buffer.** 100 ms and 200 ms join 300/500/1000, along with an auto window sized from the

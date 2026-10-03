@@ -79,6 +79,9 @@ The release APK intentionally contains the experimental accessory identity. The 
 This fork is the same app. The differences are a small set of fixes upstream does not have yet,
 plus whatever upstream has released since the fork point; everything else is upstream code.
 
+- **Settings over CarPlay.** The panel starts with Disconnect, so a live session ends without going
+  back to the home page first, and its header action returns to CarPlay. Disconnecting from the panel
+  switches that return to this app's home page.
 - **Settings round trip.** Leaving the settings screen no longer restarts the CarPlay session, and
   the head unit's top and bottom bars are separate switches that both screens follow.
 - **Music buffer.** 100 ms and 200 ms join 300/500/1000, along with an auto window sized from the
