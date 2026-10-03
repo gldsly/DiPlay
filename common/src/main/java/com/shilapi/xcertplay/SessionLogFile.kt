@@ -72,7 +72,10 @@ internal class SessionLogFile(val file: File) : Closeable {
                 body.startsWith("Microphone: stats") ||
                 // Wired transport counters, reported every ten seconds per run. The one-line final
                 // summary per run stays: it carries the failure and timeout totals.
-                body.contains(CONNECTION_IO_PERIODIC)
+                body.contains(CONNECTION_IO_PERIODIC) ||
+                // Wireless startup sampler, one line every ten seconds until the session is up. The
+                // sample that closes the observation stays: it is the run's last state.
+                (body.startsWith("wireless startup") && !body.contains("observation=ended"))
         }
 
         private const val CONNECTION_IO_PERIODIC = "wired io operation="

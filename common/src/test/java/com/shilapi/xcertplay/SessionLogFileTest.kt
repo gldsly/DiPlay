@@ -80,10 +80,22 @@ class SessionLogFileTest {
         )
         assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Audio: ready audioType=media"))
         assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Display detected: 1920x900"))
+        assertTrue(
+            SessionLogFile.isPeriodicStats(
+                "06:50:00.000  wireless startup elapsedMs=10000 authenticated=false " +
+                    "waitingFor=Bluetooth_iAP2_authentication",
+            ),
+        )
         // One final summary per transport run, and microphone start/failure lines, stay in the log.
         assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  CONNECTION_DIAGNOSTIC run=1 wired io final failures=0"))
         assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  Microphone: start source=voice codec=PCM"))
         assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  CONNECTION_DIAGNOSTIC attempt=1 stage=DiscoveringMfi"))
+        assertFalse(
+            SessionLogFile.isPeriodicStats(
+                "06:50:00.000  wireless startup elapsedMs=12000 sessionActive=true " +
+                    "observation=ended interfaceState=up",
+            ),
+        )
     }
 
     @Test
