@@ -67,7 +67,14 @@ internal class SessionLogFile(val file: File) : Closeable {
             return body.startsWith("audio stats") ||
                 body.startsWith("video stats") ||
                 body.startsWith("Video: video stats") ||
-                body.startsWith("Receive:")
+                body.startsWith("Receive:") ||
+                // Microphone capture counters, reported every five seconds while a call is up.
+                body.startsWith("Microphone: stats") ||
+                // Wired transport counters, reported every ten seconds per run. The one-line final
+                // summary per run stays: it carries the failure and timeout totals.
+                body.contains(CONNECTION_IO_PERIODIC)
         }
+
+        private const val CONNECTION_IO_PERIODIC = "wired io operation="
     }
 }

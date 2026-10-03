@@ -154,6 +154,9 @@ class CarPlayVpnService : VpnService() {
 
     fun isAttached(): Boolean = active.get() && attachment != null
 
+    /** Port the AirPlay listener actually bound, which may differ from the configured port. */
+    fun boundPort(): Int? = attachment?.config?.port
+
     override fun onDestroy() {
         detach()
         super.onDestroy()
@@ -164,7 +167,7 @@ class CarPlayVpnService : VpnService() {
         replacement: AirPlayAttachment,
     ) {
         val server = bindAirPlayServer(replacement.address, replacement.config.port)
-        attachment = replacement
+        attachment = replacement.copy(config = replacement.config.copy(port = server.localPort))
         serverSocket = server
         Thread(
             { acceptLoop(generation, server) },
@@ -176,22 +179,31 @@ class CarPlayVpnService : VpnService() {
     }
 
     /**
-     * Binds the AirPlay listener, holding the bind open until the address is bindable.
+     * Binds the AirPlay listener, waiting out an address that is not bindable yet and falling back to
+     * another port when a factory daemon already owns the preferred one.
      *
      * A Wi-Fi Direct group reports itself ready a moment before the kernel finishes assigning its
      * link-local address to p2p0, so the first bind fails with EADDRNOTAVAIL. That used to fail the
      * whole wireless bring-up - which tore the group down and cost a two-second reconnect - while
-     * the address showed up a few hundred milliseconds later.
+     * the address showed up a few hundred milliseconds later. The wait has to finish before
+     * [AirPlayPortSelector] starts probing ports: while the address is missing every candidate port
+     * fails, and the selector would report an unassigned address as a busy port.
      */
     private fun bindAirPlayServer(address: InetAddress, port: Int): ServerSocket {
+        awaitBindableAddress(address)
+        return AirPlayPortSelector.bind(address, port) { busy, bound ->
+            Log.w(TAG, "AirPlay port $busy is in use; listening on $bound instead")
+        }
+    }
+
+    /** Probes an ephemeral port until the kernel accepts the address, then releases it. */
+    private fun awaitBindableAddress(address: InetAddress) {
         val deadline = System.nanoTime() + ADDRESS_READY_TIMEOUT_MILLIS * 1_000_000L
         while (true) {
-            val server = ServerSocket()
             try {
-                server.bind(InetSocketAddress(address, port))
-                return server
+                ServerSocket().use { probe -> probe.bind(InetSocketAddress(address, 0)) }
+                return
             } catch (error: Exception) {
-                runCatching { server.close() }
                 if (!isAddressNotReady(error) || System.nanoTime() >= deadline) throw error
                 Log.i(TAG, "AirPlay listener waiting for $address to become bindable")
                 runCatching { Thread.sleep(ADDRESS_READY_RETRY_MILLIS) }

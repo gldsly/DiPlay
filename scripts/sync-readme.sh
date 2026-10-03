@@ -87,7 +87,8 @@ read -r -d '' ZH_DIFFS <<'ZH' || true
   互斥，因为两者调整的是同一个音乐音量。
 - **诊断**：导航输出被迫停止、日志过期回调、Activity 线程池泄漏现在都会明确记录或释放，不再静默。
 - **日志级别**：可在「设置 → 诊断」选择日志级别：普通（默认）只记录状态变化、警告与错误，调试级别额外记录
-  音频、视频与接收的周期统计行，日志约快四倍写满。两种级别下导出的报告都会把全部切分文件合并在一起。
+  音频、视频、接收、麦克风与有线传输的周期统计行，日志约快四倍写满。两种级别下导出的报告都会把全部
+  切分文件合并在一起。
 
 ## 来源与致谢
 
@@ -121,8 +122,9 @@ plus whatever upstream has released since the fork point; everything else is ups
 - **Diagnostics.** A guidance output that had to stop, the log-expiry callback and the activity's
   thread pools now say so instead of leaking quietly.
 - **Log level.** Settings - Diagnostics picks the level: Normal (the default) records state changes,
-  warnings and errors, while Debug adds the periodic audio, video and receive stats lines and fills
-  the log about four times faster. Reports merge every rotated file at either level.
+  warnings and errors, while Debug adds the periodic audio, video, receive, microphone and wired
+  transport stats lines and fills the log about four times faster. Reports merge every rotated file
+  at either level.
 EN
 
 # Upstream's own file names are kept, so an upstream README edit conflicts only in the header and the

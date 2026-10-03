@@ -71,8 +71,19 @@ class SessionLogFileTest {
         assertTrue(SessionLogFile.isPeriodicStats("audio stats audioType=media"))
         assertTrue(SessionLogFile.isPeriodicStats("06:49:57.999  Video: video stats rx=30.0fps"))
         assertTrue(SessionLogFile.isPeriodicStats("06:49:57.999  Receive: main packets=10"))
+        assertTrue(SessionLogFile.isPeriodicStats("06:50:00.000  Microphone: stats source=voice codec=PCM"))
+        assertTrue(
+            SessionLogFile.isPeriodicStats(
+                "06:50:00.000  CONNECTION_DIAGNOSTIC attempt=1 run=1 phase=TRANSPORT " +
+                    "wired io operation=READ result=COMPLETED elapsedMs=3 readCalls=12",
+            ),
+        )
         assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Audio: ready audioType=media"))
         assertFalse(SessionLogFile.isPeriodicStats("06:49:57.999  Display detected: 1920x900"))
+        // One final summary per transport run, and microphone start/failure lines, stay in the log.
+        assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  CONNECTION_DIAGNOSTIC run=1 wired io final failures=0"))
+        assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  Microphone: start source=voice codec=PCM"))
+        assertFalse(SessionLogFile.isPeriodicStats("06:50:00.000  CONNECTION_DIAGNOSTIC attempt=1 stage=DiscoveringMfi"))
     }
 
     @Test
