@@ -368,7 +368,11 @@ class CarPlayHostActivity : ComponentActivity() {
     private var cornerGestureClaimed = false
     private var cornerGestureStartX = 0f
     private var cornerGestureStartY = 0f
-    private var gestureFingerCount = THREE_FINGER_COUNT
+    /**
+     * Fingers the swipe-down needs, 0 when it is off. This fork keeps it off by default and opens
+     * the panel with the bottom-left single-finger swipe; the count is loaded and may be 2, 3 or 4.
+     */
+    private var gestureFingerCount = GESTURE_FINGERS_OFF
     private var settingsGestureHint: TextView? = null
     private var gestureSequenceActive = false
     private var gestureTracking = false
@@ -665,7 +669,7 @@ class CarPlayHostActivity : ComponentActivity() {
             clusterMonitor = null
         }
         gestureFingerCount = AirPlayPersistence.loadSettingsGestureFingers(this)
-        settingsGestureHint?.text = getString(R.string.open_diplay_settings_hint, gestureFingerCount)
+        settingsGestureHint?.text = gestureHintText()
         ensureClusterPresentation()
         AirPlayPersistence.overlaySettingsListener = { runOnUiThread { applyClusterTurnOverlay() } }
         com.shilapi.xcertplay.hud.BydNavigationOutputs.setTurnOverlayListener(clusterTurnOverlayListener)
@@ -1019,7 +1023,7 @@ class CarPlayHostActivity : ComponentActivity() {
             setOnClickListener { showDiPlayHome() }
         }, LinearLayout.LayoutParams(dp(300), dp(64)))
         val gestureHint = TextView(this).apply {
-            text = getString(R.string.open_diplay_settings_hint, gestureFingerCount)
+            text = gestureHintText()
             textSize = 13f; gravity = Gravity.CENTER; setTextColor(Color.rgb(168, 182, 202)); setPadding(0, dp(20), 0, 0)
         }
         panel.addView(gestureHint)
@@ -1584,12 +1588,18 @@ class CarPlayHostActivity : ComponentActivity() {
         val gestureButton = Button(this).apply {
             isAllCaps = false
             setOnClickListener {
-                gestureFingerCount = if (gestureFingerCount >= 4) 2 else gestureFingerCount + 1
+                // Off is part of the cycle, so the bottom-left single-finger swipe stays reachable
+                // and is what a fresh install and a cleared preference both get.
+                gestureFingerCount = when (gestureFingerCount) {
+                    GESTURE_FINGERS_OFF -> 2
+                    4 -> GESTURE_FINGERS_OFF
+                    else -> gestureFingerCount + 1
+                }
                 AirPlayPersistence.saveSettingsGestureFingers(this@CarPlayHostActivity, gestureFingerCount)
-                text = getString(R.string.settings_gesture_fingers, gestureFingerCount)
+                text = gestureButtonText()
             }
         }
-        gestureButton.text = getString(R.string.settings_gesture_fingers, gestureFingerCount)
+        gestureButton.text = gestureButtonText()
         content.addView(gestureButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
 
         val scroll = ScrollView(this).apply {
@@ -3781,6 +3791,8 @@ class CarPlayHostActivity : ComponentActivity() {
             return true
         }
 
+        // Off (0) never matches a pointer count here, so the panel then opens only through the
+        // bottom-left swipe further down. Picking 2, 3 or 4 in Settings enables this path.
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 gestureSequenceActive = false
@@ -4031,6 +4043,16 @@ class CarPlayHostActivity : ComponentActivity() {
         return total / event.pointerCount
     }
 
+    /** Which gesture the settings panel says opens it; off names the bottom-left single-finger swipe. */
+    private fun gestureHintText(): String =
+        if (gestureFingerCount == GESTURE_FINGERS_OFF) getString(R.string.open_diplay_settings_hint_off)
+        else getString(R.string.open_diplay_settings_hint, gestureFingerCount)
+
+    /** The settings button that cycles the gesture: off, 2, 3, 4. */
+    private fun gestureButtonText(): String =
+        if (gestureFingerCount == GESTURE_FINGERS_OFF) getString(R.string.settings_gesture_fingers_off)
+        else getString(R.string.settings_gesture_fingers, gestureFingerCount)
+
     private fun CarPlayStatus.describe(): String = when (this) {
         CarPlayStatus.DiscoveringMfi -> getString(R.string.preparing_mfi_authentication)
         CarPlayStatus.WaitingForMfi -> getString(R.string.waiting_for_mfi_coprocessor)
@@ -4077,7 +4099,10 @@ class CarPlayHostActivity : ComponentActivity() {
         const val SETTINGS_GESTURE_SWIPE_DISTANCE_DP = 72
         const val SETTINGS_GESTURE_SWIPE_DIRECTION_RATIO = 1.15f
 
-        /** Default for the configurable multi-finger settings swipe; Settings offers 2, 3 and 4. */
+        /** Off: no multi-finger swipe; the bottom-left single-finger swipe opens the panel instead. */
+        const val GESTURE_FINGERS_OFF = 0
+
+        /** Upstream's default for the configurable multi-finger swipe; Settings offers off, 2, 3, 4. */
         const val THREE_FINGER_COUNT = 3
 
         /** Bottom-left hot corner for the single-finger settings swipe, as a surface fraction. */

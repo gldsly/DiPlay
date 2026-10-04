@@ -464,9 +464,14 @@ class DiPlayActivity : ComponentActivity() {
         content.addView(label(getString(R.string.your_drive_your_way), 34, TEXT, true))
         content.addView(label(getString(R.string.apply_reconnects_carplay_for_size_resolution_music_buffer), 17, MUTED).apply { setPadding(0, dp(8), 0, dp(24)) })
         section(content, getString(R.string.carplay_controls), R.drawable.ic_dp_display) { card ->
-            val gestureFingers = listOf(2, 3, 4)
+            // Off first: this fork opens the panel with the bottom-left single-finger swipe, and the
+            // multi-finger swipe stays available for a head unit that reports those touches.
+            val gestureFingers = listOf(0, 2, 3, 4)
             choice(card, getString(R.string.settings_gesture_fingers_label),
-                gestureFingers.map { getString(R.string.settings_gesture_fingers_option, it) },
+                gestureFingers.map {
+                    if (it == 0) getString(R.string.settings_gesture_fingers_off)
+                    else getString(R.string.settings_gesture_fingers_option, it)
+                },
                 gestureFingers.indexOf(AirPlayPersistence.loadSettingsGestureFingers(this)).coerceAtLeast(0),
                 reconnects = false) {
                 AirPlayPersistence.saveSettingsGestureFingers(this, gestureFingers[it])

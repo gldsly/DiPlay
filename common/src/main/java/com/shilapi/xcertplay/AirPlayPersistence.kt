@@ -599,14 +599,22 @@ object AirPlayPersistence {
         overlaySettingsListener?.invoke()
     }
 
-    /** Fingers for the swipe-down that opens settings; some head units reserve three. */
-    fun loadSettingsGestureFingers(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_SETTINGS_GESTURE_FINGERS, 3).coerceIn(2, 4)
+    /**
+     * Fingers for the swipe-down that opens settings over CarPlay. Zero means off, which is this
+     * fork's default: the bottom-left single-finger swipe opens the panel instead, because the
+     * multi-finger gesture never reached the activity on the head unit under test. A head unit that
+     * does report multi-finger touches can still pick 2, 3 or 4 here.
+     */
+    fun loadSettingsGestureFingers(context: Context): Int {
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_SETTINGS_GESTURE_FINGERS, 0)
+        // 0 keeps the swipe off; 1 and anything out of range fall back to off as well.
+        return if (stored in 2..4) stored else 0
+    }
 
     fun saveSettingsGestureFingers(context: Context, fingers: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_SETTINGS_GESTURE_FINGERS, fingers.coerceIn(2, 4)).apply()
+            .putInt(KEY_SETTINGS_GESTURE_FINGERS, fingers.coerceIn(0, 4)).apply()
     }
 
     fun loadCenterMapFollowsDashboard(context: Context): Boolean =
