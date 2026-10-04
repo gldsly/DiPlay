@@ -81,8 +81,10 @@ class AirPlaySession(
     private val closed = AtomicBoolean(false)
     private val notified = AtomicBoolean(false)
     private var eventServer: ServerSocket? = null
-    private var eventSocket: Socket? = null
-    private var eventCipher: ControlCipher? = null
+    // Written by the event thread, read by the control and touch threads: both need the volatile so a
+    // command never sees a socket without its cipher.
+    @Volatile private var eventSocket: Socket? = null
+    @Volatile private var eventCipher: ControlCipher? = null
     private var eventCseq = 0
     private var pendingNightMode: Boolean? = null
     private val firstTouchSendLogged = AtomicBoolean(false)
@@ -772,8 +774,13 @@ class AirPlaySession(
         } finally {
             debugLog("airplay event connection closed")
             videoPlaybackAvailability.setEventReady(false)
-            if (eventSocket === socket) eventSocket = null
-            eventCipher = null
+            // Both fields belong to this socket. An older connection finishing after a newer one was
+            // accepted must not clear the newer socket's cipher: sendCommandLocked would then drop
+            // every touch, key and iAP message for the rest of the session without saying so.
+            if (eventSocket === socket) {
+                eventSocket = null
+                eventCipher = null
+            }
             safeClose(socket)
             if (!closed.get()) close()
         }

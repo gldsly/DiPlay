@@ -8,6 +8,18 @@ internal class AudioBufferProgress(private val frameBytes: Int) {
 
     fun written(bytes: Int) { writtenBytes += bytes }
 
+    /**
+     * Called when the renderer builds a fresh AudioTrack. A rebuilt track restarts its playback head
+     * at 0, so keeping the old head and totals would make the next accounting jump by a wrap-sized
+     * amount: [queuedBytes] would then stay clamped at 0 for the rest of the session and every
+     * underrun after the rebuild would look like an empty hardware buffer.
+     */
+    fun reset() {
+        writtenBytes = 0L
+        playedFrames = 0L
+        lastHead = 0L
+    }
+
     fun queuedBytes(rawHead: Int): Long {
         val head = rawHead.toLong() and 0xffff_ffffL
         playedFrames += (head - lastHead) and 0xffff_ffffL

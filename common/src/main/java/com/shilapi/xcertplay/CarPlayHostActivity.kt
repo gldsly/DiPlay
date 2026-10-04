@@ -3751,7 +3751,7 @@ class CarPlayHostActivity : ComponentActivity() {
         sink = null
         sessionDisplay = null
         Log.i(TAG, "shutdown reason=$reason terminateProcess=$terminateProcess")
-        teardownExecutor.execute {
+        val teardown = Runnable {
             oldController?.close()
             val clean = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
             oldSink?.close()
@@ -3764,6 +3764,18 @@ class CarPlayHostActivity : ComponentActivity() {
             teardownExecutor.shutdown()
             mainHandler.post { completion() }
             if (terminateProcess) Process.killProcess(Process.myPid())
+        }
+        try {
+            teardownExecutor.execute(teardown)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // This activity was destroyed, so its own pool is already closed, but a background session
+            // can still ask for a disconnect from the notification. Letting the rejection escape used
+            // to crash on the caller's thread *and* skip completion(), which left
+            // CarPlayBackgroundSession.stopping stuck at true - the session could then never be
+            // disconnected again and the disconnect button stayed dead for the life of the process.
+            // A fresh daemon thread finishes the teardown instead; the caller is usually the main
+            // thread and must not block here.
+            Thread(teardown, "diplay-teardown-late").apply { isDaemon = true }.start()
         }
     }
 

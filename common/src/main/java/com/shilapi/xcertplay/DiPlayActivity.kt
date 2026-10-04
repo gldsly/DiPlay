@@ -1221,7 +1221,10 @@ class DiPlayActivity : ComponentActivity() {
             slider = SeekBar(context).apply {
                 max = steps.lastIndex
                 progress = steps.indexOf(current).coerceIn(steps.indices)
-                minHeight = dp(44)
+                // minimumHeight, not minHeight: on a SeekBar the latter resolves to
+                // ProgressBar.setMinHeight, which only exists from API 29, and this app runs on
+                // Android 9 (minSdk 28).
+                minimumHeight = dp(44)
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         val value = steps[progress.coerceIn(steps.indices)]
@@ -2454,7 +2457,9 @@ class DiPlayActivity : ComponentActivity() {
         runCatching {
             manager.requestGroupInfo(channel) { group ->
                 if (isFinishing || isDestroyed) return@requestGroupInfo
-                val direct = group?.frequency ?: 0
+                // WifiP2pGroup.frequency only exists from API 29, and this app also runs on Android 9:
+                // reading it there threw NoSuchMethodError on every render, caught and logged each time.
+                val direct = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) group?.frequency ?: 0 else 0
                 target.text = stationLine + "\n" +
                     bandLine(getString(R.string.wireless_direct_label), direct)
             }

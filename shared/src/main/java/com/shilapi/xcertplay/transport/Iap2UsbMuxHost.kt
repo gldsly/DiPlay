@@ -64,7 +64,11 @@ class Iap2UsbMuxHost private constructor(
             closed = true
             connections.values.toList().also { connections.clear() }
         }
-        activeConnections.forEach(Iap2UsbMuxTcpConnection::closeFromHost)
+        activeConnections.forEach { connection ->
+            // One connection failing to close must not keep the rest - and the USB pipe - open: a
+            // caller blocked in recv() would never be woken, and the pipe would leak for good.
+            runCatching { connection.closeFromHost() }
+        }
         pipe.close()
         if (::readerThread.isInitialized && Thread.currentThread() !== readerThread) {
             try {
@@ -245,7 +249,7 @@ class Iap2UsbMuxHost private constructor(
             closed = true
             connections.values.toList().also { connections.clear() }
         }
-        activeConnections.forEach { it.closeFromHost(error) }
+        activeConnections.forEach { connection -> runCatching { connection.closeFromHost(error) } }
         pipe.close()
     }
 

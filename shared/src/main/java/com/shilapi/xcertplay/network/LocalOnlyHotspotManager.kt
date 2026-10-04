@@ -89,7 +89,9 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
                 deadlineNanos = deadlineNanos,
             )
             val liveRadio = awaitRadioInfo(radioInfo, apInterface, configuration, attempt, deadlineNanos)
-            if (liveRadio?.frequencyMHz?.let { it !in 5160..5895 } ?: (configuration.bandLabel != "5 GHz")) {
+            // Judge the band value, not its label: firmware that reports a combined 2.4+5 GHz band
+            // labels it "Unknown band (3)", which used to fail a hotspot that had already started.
+            if (liveRadio?.frequencyMHz?.let { it !in 5160..5895 } ?: !configuration.fiveGhz) {
                 throw IOException("This firmware did not provide the requested 5 GHz local hotspot; choose Wi-Fi Direct or Car hotspot")
             }
 
@@ -248,10 +250,10 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
                         return LocalOnlyHotspotRadioInfo.Radio(ap.bssid ?: configuration.bssid, settled)
                     }
                     if (System.nanoTime() - legacyStart >= TimeUnit.MILLISECONDS.toNanos(
-                            if (configuration.bandLabel == "5 GHz") 1500 else 6000
+                            if (configuration.fiveGhz) 1500 else 6000
                         )
                     ) {
-                        if (configuration.bandLabel == "5 GHz") {
+                        if (configuration.fiveGhz) {
                             // Every BYD Qualcomm tested answers WEXT with errno 95 and
                             // Android 11/12 has no live LOHS channel callback, so an
                             // unreadable channel cannot be treated as a broken hotspot.
@@ -436,6 +438,11 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             bssid = bssid?.toString(),
             bssidBytes = bssid?.toByteArray(),
             bandLabel = channel.second,
+            fiveGhz = if (Build.VERSION.SDK_INT >= 36) {
+                configuration.channels.keyAt(0) and SoftApConfiguration.BAND_5GHZ != 0
+            } else {
+                channel.second == "5 GHz"
+            },
         )
     }
 
@@ -452,6 +459,7 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             }
         }
         val channel = readWifiConfigurationChannel(configuration)
+        val bandLabel = readWifiConfigurationBandLabel(configuration, channel)
 
         return HotspotConfiguration(
             ssid = ssid,
@@ -460,7 +468,8 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             channel = channel,
             bssid = bssid?.toString(),
             bssidBytes = bssid?.toByteArray(),
-            bandLabel = readWifiConfigurationBandLabel(configuration, channel),
+            bandLabel = bandLabel,
+            fiveGhz = bandLabel == "5 GHz",
         )
     }
 
@@ -557,9 +566,10 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             if (networkInterface != null) {
                 networkInterface.hotspotAddress()?.let { hostAddress ->
                     val interfaceBssid = networkInterface.interfaceBssid()
-                    if (bssid == null && interfaceBssid == null) {
-                        return@let
-                    }
+                    // No BSSID anywhere (the framework can mask both the configuration's and the
+                    // interface's), but the interface and its address are live, so accept it. This
+                    // used to return from the lambda only and fall back into the polling loop, which
+                    // failed a hotspot that had actually started.
                     return ApInterface(
                         name = networkInterface.name,
                         hostAddress = hostAddress,
@@ -826,6 +836,12 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
         val bssid: String?,
         val bssidBytes: ByteArray?,
         val bandLabel: String,
+        /**
+         * The framework confirmed the 5 GHz band. Judged from the band mask where one is available:
+         * a firmware that reports a combined 2.4+5 GHz band gets "Unknown band (3)" out of
+         * [softApBandLabel], and reading that as "not 5 GHz" rejected a hotspot that had started.
+         */
+        val fiveGhz: Boolean,
     )
 
     private class ApInterface(

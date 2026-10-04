@@ -257,11 +257,16 @@ class WifiP2pGroupManager(
         }
     }
 
-    override fun onCarPlayConfirmed() = synchronized(stateLock) {
-        if (closed || !created || carPlayConfirmed) return@synchronized
-        val save = pendingSuccess ?: return@synchronized
+    override fun onCarPlayConfirmed() {
+        // Remember outside the lock: save() commits to disk, and this runs at the moment CarPlay
+        // actually comes up, where a synchronous write must not hold up the wireless bring-up.
+        val save = synchronized(stateLock) {
+            if (closed || !created || carPlayConfirmed) return
+            val pending = pendingSuccess ?: return
+            carPlayConfirmed = true
+            pending
+        }
         // Storage failure must not interrupt a working CarPlay session.
-        carPlayConfirmed = true
         val saved = runCatching { save() }.getOrDefault(false)
         diagnostic("Wi-Fi P2P remembered saved=$saved proof=authenticated_first_frame")
     }

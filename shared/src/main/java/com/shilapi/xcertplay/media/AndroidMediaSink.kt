@@ -189,7 +189,7 @@ class AndroidMediaSink(
     private val pendingVideoCodec = ConcurrentHashMap<Int, VideoCodec>()
     private val videoRecoveryHandlers = ConcurrentHashMap<Int, () -> Unit>()
     private val videoDiagnosticHandlers = ConcurrentHashMap<Int, (String) -> Unit>()
-    private val recoveryPending = AtomicBoolean(false)
+    private val recoveryPendingTypes: MutableSet<Int> = ConcurrentHashMap.newKeySet()
     // Extra decoders draw the same stream on other surfaces, such as the centre card.
     private val mirrorLock = Any()
     private val mirrorSurfaces = HashMap<Pair<Int, String>, Surface>()
@@ -248,14 +248,17 @@ class AndroidMediaSink(
     }
 
     private fun requestVideoRecovery(type: Int) {
-        if (!recoveryPending.compareAndSet(false, true)) return
+        // Deduplicated per stream, not per sink: while one screen's keyframe request is in flight the
+        // other screen's own request must still go out, or that stream stays corrupt until the
+        // throttled retry comes around.
+        if (!recoveryPendingTypes.add(type)) return
         try {
             recoveryExecutor.execute {
                 try { videoRecoveryHandlers[type]?.invoke() }
                 catch (error: Exception) { Log.w("xcertplay-usb", "Video keyframe request failed", error) }
-                finally { recoveryPending.set(false) }
+                finally { recoveryPendingTypes.remove(type) }
             }
-        } catch (_: java.util.concurrent.RejectedExecutionException) { recoveryPending.set(false) }
+        } catch (_: java.util.concurrent.RejectedExecutionException) { recoveryPendingTypes.remove(type) }
     }
 
     fun setSurface(type: Int, surface: Surface) {
@@ -546,6 +549,9 @@ private class VideoDecoder(
     override fun close() {
         running = false
         thread.interrupt()
+        // Wait for the worker before the caller releases the Surface: a frame handed to a released
+        // Surface is what makes the vendor decoder fail and forces a rebuild.
+        runCatching { thread.join(CLOSE_JOIN_MILLIS) }
     }
 
     private fun run() {
@@ -864,6 +870,7 @@ private class VideoDecoder(
         const val MAX_INPUT_SIZE = 8 * 1024 * 1024
         const val INPUT_TIMEOUT_US = 10_000L
         const val MAX_FRAME_AGE_NS = 250_000_000L
+        const val CLOSE_JOIN_MILLIS = 1_000L
         val START_CODE = byteArrayOf(0x00, 0x00, 0x00, 0x01)
     }
 }
@@ -1011,6 +1018,9 @@ private class AudioRenderer(
     override fun close() {
         running = false
         thread.interrupt()
+        // The renderer holds an AudioTrack and, on some paths, the audio focus. Returning before the
+        // worker is gone let it write to a released track.
+        runCatching { thread.join(CLOSE_JOIN_MILLIS) }
     }
 
     private fun run() {
@@ -1186,6 +1196,9 @@ private class AudioRenderer(
         trackAttributes = audioTrackAttributesForFocus(built, attributes)
         diagnosticStage = "track-capacity"
         val capacityBytes = built.bufferSizeInFrames * frameBytes
+        // The track is new, so its playback head starts at 0 again; drop the old accounting with it
+        // or the buffer looks empty forever after a retry.
+        bufferProgress.reset()
         trackCapacityBytes = capacityBytes
         startThresholdBytes = if (autoBuffer) {
             autoThresholdBytes()
@@ -1712,5 +1725,6 @@ private class AudioRenderer(
         const val DECODED_BUFFER_LOG_INTERVAL = 50
         const val MIN_START_RETRY_MILLIS = 500L
         const val MAX_START_RETRY_MILLIS = 5_000L
+        const val CLOSE_JOIN_MILLIS = 1_000L
     }
 }
