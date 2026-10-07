@@ -42,7 +42,8 @@ android {
             // Car-test build for this head unit. Keep in step with DiPlayPackages.CAR_TEST_SUFFIX:
             // the BYD integrations compare the running package name against it.
             applicationIdSuffix = ".sealion_05_dmi"
-            versionNameSuffix = "-hud-test"
+            // Shown on the home page and in Settings - About, so it names the car this package is for.
+            versionNameSuffix = "-sealion_05_dmi"
         }
         release {
             optimization {
@@ -130,7 +131,8 @@ val localBuildNumber =
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
-            // The debug variant's versionName carries a "-hud-test" suffix; keep it out of the name.
+            // The debug variant's versionName carries the car suffix (for example
+            // "0.2.13-海狮 05 DM-i 26 款"); keep it out of the file name.
             val version = output.versionName.get().substringBefore('-')
             (output as? com.android.build.api.variant.impl.VariantOutputImpl)
                 ?.outputFileName?.set("DiPlay_${version}_LB_$localBuildNumber.apk")
