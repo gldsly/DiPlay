@@ -5,7 +5,9 @@
     <string name="contrib_audio_home_nav_channel_label">导航音频流</string>
     <string name="contrib_audio_home_nav_channel_note">导航默认 15（比亚迪的导航音频通道）。0 表示自动路由；1–20 是传统音频流编号，车机可能会将其路由到对应的车辆音频输出。点选数值可试听。更改在重新连接后生效。</string>
     <string name="contrib_audio_home_toggle_audio_focus">音频焦点</string>
-    <string name="contrib_audio_home_toggle_audio_focus_desc">CarPlay 媒体向系统申请音频焦点，同时也会让车机自带的播放器停止播放。它与「导航播报时压低音乐」互斥——两者调整的是同一个音乐音量。更改在重新连接后生效。</string>
+    <string name="contrib_audio_home_toggle_audio_focus_desc">CarPlay 媒体向系统申请音频焦点，同时也会让车机自带的播放器停止播放。它与「导航播报时压低音乐」互斥——两者调整的是同一个音乐音量。若开启后没有声音（部分车机焦点处理异常），请关闭本开关。更改在重新连接后生效。</string>
+    <string name="audio_focus_auto_yield">暂时失去音频焦点时静音媒体</string>
+    <string name="audio_focus_auto_yield_desc">启用音频焦点后，在 Android 音频被打断（包括来电）时静音媒体，重新获得焦点后恢复。如果车机不恢复音频焦点，请关闭此选项。更改在重新连接后生效。</string>
     <string name="contrib_audio_home_toggle_nav_duck">导航播报时压低音乐</string>
     <string name="contrib_audio_home_toggle_nav_duck_desc">导航播报时把 CarPlay 音乐音量降低，而不是直接叠加播放，两端各有一段短渐变。两条音轨都属于本应用，所以这里直接调节音量，不走音频焦点。部分车机的混音器本身就会这样做。立即生效。</string>
     <string name="unavailable_while_guidance_ducking">「导航播报时压低音乐」开启时不可用。</string>
