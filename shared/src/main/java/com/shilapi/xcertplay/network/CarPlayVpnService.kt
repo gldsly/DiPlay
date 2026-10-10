@@ -66,6 +66,10 @@ class CarPlayVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private var attachGeneration = 0
 
+    /** The exception chain behind the latest [AttachResult.Failed], for the diagnostic log. */
+    @Volatile var lastAttachFailure: String? = null
+        private set
+
     override fun onBind(intent: Intent?): IBinder = binder
 
     @Synchronized
@@ -119,6 +123,7 @@ class CarPlayVpnService : VpnService() {
             AttachResult.Started
         } catch (error: Exception) {
             releaseLocked()
+            lastAttachFailure = attachFailure(error)
             AttachResult.Failed(error.message ?: error.javaClass.simpleName)
         }
     }
@@ -154,6 +159,7 @@ class CarPlayVpnService : VpnService() {
             AttachResult.Started
         } catch (error: Exception) {
             releaseLocked()
+            lastAttachFailure = attachFailure(error)
             AttachResult.Failed(error.message ?: error.javaClass.simpleName)
         }
     }
@@ -386,5 +392,18 @@ class CarPlayVpnService : VpnService() {
 
         /** Returns the VPN consent intent, or null when consent is already granted. */
         fun prepare(context: Context): Intent? = VpnService.prepare(context)
+
+        /**
+         * Android 7.1 reported only "Invalid argument" when establish failed (#557); name the
+         * exception chain and the frame that threw, so the rejected VPN setting can be identified.
+         */
+        internal fun attachFailure(error: Throwable): String {
+            val chain = generateSequence(error) { it.cause }.take(4).joinToString(" <- ") { failure ->
+                "${failure.javaClass.simpleName}: ${failure.message ?: "no message"}"
+            }
+            val origin = error.stackTrace.firstOrNull()
+                ?.let { " at ${it.className.substringAfterLast('.')}.${it.methodName}" }.orEmpty()
+            return chain + origin
+        }
     }
 }
