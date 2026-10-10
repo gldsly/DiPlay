@@ -8,7 +8,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
@@ -20,6 +19,7 @@ import android.util.Log
 import android.view.KeyEvent
 import androidx.core.graphics.drawable.toBitmap
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
+import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.hud.BydOutputSettings
 import com.shilapi.xcertplay.media.CarPlayNowPlaying
@@ -54,7 +54,7 @@ internal object CarPlayMediaKeys {
     private var artworkOwner: Any? = null
     private var controller: CarPlayController? = null
     private var session: MediaSession? = null
-    private var focusRequest: AudioFocusRequest? = null
+    private var focusRequest: AudioFocusRequestCompat? = null
     private var focusOwner: Any? = null
     private var focusEventRevision = 0L
     private var focusHeld = false
@@ -74,7 +74,11 @@ internal object CarPlayMediaKeys {
         }
         appContext = context.applicationContext
         controller = next
-        next.playbackListener = { playing -> onIphonePlaying(next, playing) }
+        com.shilapi.xcertplay.media.AmbientMusicController.claimPlaybackOwner(next)
+        next.playbackListener = { playing ->
+            com.shilapi.xcertplay.media.AmbientMusicController.phonePlaybackChanged(next, playing)
+            onIphonePlaying(next, playing)
+        }
         next.nowPlayingListener = { update -> onNowPlayingChanged(next, update) }
         next.artworkListener = { id, bytes -> onArtworkChanged(next, id, bytes) }
     }
@@ -83,6 +87,7 @@ internal object CarPlayMediaKeys {
     @Synchronized
     fun detach(expected: CarPlayController?) {
         if (expected == null || controller !== expected) return
+        com.shilapi.xcertplay.media.AmbientMusicController.releasePlaybackOwner(expected)
         expected.playbackListener = null
         expected.nowPlayingListener = null
         expected.artworkListener = null
@@ -154,7 +159,7 @@ internal object CarPlayMediaKeys {
         val request = focusRequest ?: return
         if (focusHeld) return
         val audio = appContext?.getSystemService(AudioManager::class.java) ?: return
-        focusHeld = audio.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        focusHeld = request.request(audio) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         if (focusHeld) forwardGrantedFocusLocked()
         Log.i(TAG, "audio focus regained=$focusHeld")
     }
@@ -172,18 +177,16 @@ internal object CarPlayMediaKeys {
         val owner = Any().also { focusOwner = it }
         focusEventRevision = 0L
         val audio = context.getSystemService(AudioManager::class.java)
-        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
-            .setOnAudioFocusChangeListener({ change ->
-                onFocusChanged(expectedController, owner, change)
-            }, mainHandler)
-            .build()
-        val granted = audio?.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        val request = AudioFocusRequestCompat(
+            AudioManager.AUDIOFOCUS_GAIN,
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build(),
+            { change -> onFocusChanged(expectedController, owner, change) },
+            mainHandler,
+        )
+        val granted = audio?.let(request::request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         focusRequest = request
         focusHeld = granted
         if (granted) forwardGrantedFocusLocked()
@@ -239,7 +242,7 @@ internal object CarPlayMediaKeys {
         nowPlaying = CarPlayNowPlaying()
         artwork = null
         artworkCache.clear()
-        focusRequest?.let { request -> appContext?.getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(request) }
+        focusRequest?.let { request -> appContext?.getSystemService(AudioManager::class.java)?.let(request::abandon) }
         focusRequest = null
         focusHeld = false
     }

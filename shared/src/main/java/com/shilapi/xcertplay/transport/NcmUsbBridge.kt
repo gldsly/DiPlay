@@ -42,6 +42,7 @@ class NcmUsbBridge internal constructor(
     private var queuedBytes = 0
     private var buffered = ByteArray(0)
     private var bufferedSize = 0
+    private var optionalShortPacketPad = false
     private val readBuffer = ByteArray(READ_CHUNK_BYTES)
     // Bulk IN uses one persistent async request: bulkTransfer() pins its byte[] in a JNI critical
     // section for the whole wait, which blocks ART's GC thread flip and, with it, every other USB
@@ -50,7 +51,8 @@ class NcmUsbBridge internal constructor(
     private val directReadBuffer = ByteBuffer.allocateDirect(READ_CHUNK_BYTES)
     private var readRequest: UsbRequest? = null
     private var readQueued = false
-    private val readQueuePolicy = UsbReadQueuePolicy()
+    private val readQueuePolicy = UsbReadQueuePolicy.forCurrentPlatform()
+    private val readRequests = UsbRequestQueue(connection, "ncm-read-reaper")
     private val statusRunning = AtomicBoolean(statusEndpoint != null)
     private val statusThread = statusEndpoint?.let { endpoint ->
         Thread({ drainStatus(endpoint) }, "ncm-status-in").apply {
@@ -137,6 +139,7 @@ class NcmUsbBridge internal constructor(
                 // Best-effort release; the connection close below is authoritative.
             }
         }
+        readRequests.close()
         connection.close()
         runCatching { requestToClose?.close() }
     }
@@ -175,22 +178,33 @@ class NcmUsbBridge internal constructor(
 
     private fun drainFrames() {
         while (true) {
+            // wBlockLength describes the complete NTB. A packet-aligned USB transfer may end
+            // with a ZLP (no byte in the buffer), or carry one zero byte to force a short packet.
+            // Do not wait for that optional byte or consume the next NTB's header as padding.
+            // Keep this state when the pad/header arrives in a later USB completion.
+            if (optionalShortPacketPad && bufferedSize > 0) {
+                when (buffered[0].toInt() and 0xff) {
+                    0 -> {
+                        buffered.copyInto(buffered, 0, 1, bufferedSize)
+                        bufferedSize -= 1
+                    }
+                    Ntb16Codec.NTH16_SIG and 0xff -> Unit // The next header is validated below.
+                    else -> throw failSession("Invalid NTB16 short-packet pad")
+                }
+                optionalShortPacketPad = false
+            }
             if (bufferedSize < 12) return
             if (readU32(buffered, 0) != Ntb16Codec.NTH16_SIG) {
                 throw failSession("NCM read buffer does not begin with an NTB16 header")
             }
             val blockLength = readU16(buffered, 8)
             if (blockLength < 28) throw failSession("Invalid NTB16 block length $blockLength")
-            val padded = blockLength % USB_PACKET_SIZE == 0
-            val wireLength = blockLength + if (padded) 1 else 0
-            if (bufferedSize < wireLength) return
-            if (padded && buffered[blockLength].toInt() != 0) {
-                throw failSession("Invalid NTB16 short-packet pad")
-            }
+            if (bufferedSize < blockLength) return
             for (frame in Ntb16Codec.parse(buffered, 0, blockLength)) enqueueFrame(frame)
-            val remaining = bufferedSize - wireLength
-            buffered.copyInto(buffered, 0, wireLength, bufferedSize)
+            val remaining = bufferedSize - blockLength
+            buffered.copyInto(buffered, 0, blockLength, bufferedSize)
             bufferedSize = remaining
+            optionalShortPacketPad = blockLength % USB_PACKET_SIZE == 0
         }
     }
 
@@ -236,7 +250,7 @@ class NcmUsbBridge internal constructor(
                 }
                 if (!readQueued) {
                     directReadBuffer.clear()
-                    val queued = readQueuePolicy.queue(directReadBuffer, ::checkOpenLocked, current::queue)
+                    val queued = readQueuePolicy.queue(directReadBuffer, ::checkOpenLocked) { readRequests.queue(current, it) }
                     if (!queued.queued) throw failSession(
                         "Android could not queue the NCM read request (api=${Build.VERSION.SDK_INT} " +
                             "endpoint=${describeUsbEndpoint(inEndpoint)} firstBytes=${queued.firstBytes} " +
@@ -262,7 +276,7 @@ class NcmUsbBridge internal constructor(
         }
         try {
             val completed = try {
-                connection.requestWait(timeoutMillis.coerceAtLeast(1))
+                readRequests.await(timeoutMillis.coerceAtLeast(1))
             } catch (_: TimeoutException) {
                 // Nothing arrived yet; the request stays queued for the next call. USBMUX owns
                 // authoritative detach/failure detection for the same phone.

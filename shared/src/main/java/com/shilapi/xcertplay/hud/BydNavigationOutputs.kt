@@ -7,6 +7,7 @@ import com.shilapi.xcertplay.iap2.wire.Iap2Frame
 object BydNavigationOutputs {
     /** Recover a journaled interrupted output when the app opens, even before a phone reconnects. */
     fun onAppOpened(context: Context) {
+        BydBluetoothSuspend.onAppOpened(context)
         BydOemClusterNavi.restoreIfNeeded(context)
         BydDiLink3ClusterOutput.restoreIfNeeded(context)
         com.shilapi.xcertplay.network.WifiScanPause.restoreIfNeeded(context)
@@ -44,6 +45,15 @@ object BydNavigationOutputs {
 
     /** The running CarPlay session: told every second whether the cluster currently shows the map. */
     fun setClusterStreamControl(control: (Boolean) -> Unit) { BydClusterMapPause.streamControl = control }
+
+    /** Latest ADB wheel-menu navi mode, or null when it cannot be read. */
+    fun clusterNaviMode(): BydClusterNaviMode? = BydClusterMapPause.lastNaviMode
+
+    /** Called whenever the ADB navi mode changes. Pass null to stop following. */
+    fun setClusterNaviModeListener(listener: ((BydClusterNaviMode?) -> Unit)?) {
+        BydClusterMapPause.onNaviMode = listener
+        listener?.invoke(BydClusterMapPause.lastNaviMode)
+    }
 
     fun clearClusterStreamControl(control: (Boolean) -> Unit) {
         if (BydClusterMapPause.streamControl == control) BydClusterMapPause.streamControl = null
